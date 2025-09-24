@@ -67,6 +67,7 @@ const menuItems = [
   { path: '/orders', label: 'Novo Pedido', icon: 'pi pi-plus' },
   { path: '/kitchen', label: 'Cozinha', icon: 'pi pi-stopwatch' },
   { path: '/pathfinders', label: 'Desbravadores', icon: 'pi pi-users' },
+  { path: '/products', label: 'Produtos', icon: 'pi pi-box' },
   { path: '/leaderboard', label: 'Ranking', icon: 'pi pi-trophy' },
   { path: '/cost-calculation', label: 'Custos', icon: 'pi pi-calculator' }
 ]

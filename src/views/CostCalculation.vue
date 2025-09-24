@@ -160,6 +160,31 @@
             </div>
           </div>
         </div>
+
+        <div class="create-product-section">
+          <h3>Criar Produto com este Preço</h3>
+          <div class="product-quick-form">
+            <input
+              v-model="productName"
+              type="text"
+              placeholder="Nome do produto"
+              class="product-name-input"
+            />
+            <button
+              @click="createProductWithPrice(totalCostPerProduct * 2)"
+              class="create-product-btn"
+            >
+              Criar com Margem 100% (R$ {{ (totalCostPerProduct * 2).toFixed(2) }})
+            </button>
+            <button
+              v-if="customPrice > 0"
+              @click="createProductWithPrice(customPrice)"
+              class="create-product-btn custom"
+            >
+              Criar com Preço Personalizado (R$ {{ customPrice.toFixed(2) }})
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -167,6 +192,9 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 interface Ingredient {
   name: string
@@ -197,6 +225,23 @@ const ingredients = ref<Ingredient[]>([
 ])
 
 const customPrice = ref(0)
+const productName = ref('')
+
+const createProductWithPrice = (price: number) => {
+  if (!productName.value.trim()) {
+    alert('Por favor, insira um nome para o produto')
+    return
+  }
+
+  router.push({
+    path: '/products',
+    query: {
+      name: productName.value,
+      price: price.toFixed(2),
+      fromCalculator: 'true'
+    }
+  })
+}
 
 const addIngredient = () => {
   ingredients.value.push({
@@ -573,6 +618,61 @@ const getMarginPercentage = (sellPrice: number): number => {
 .custom-result {
   margin-bottom: 0.5rem;
   color: #17a2b8;
+}
+
+.create-product-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid #e9ecef;
+}
+
+.create-product-section h3 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.product-quick-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.product-name-input {
+  padding: 0.75rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+}
+
+.product-name-input:focus {
+  border-color: #ef7f47;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(239, 127, 71, 0.1);
+}
+
+.create-product-btn {
+  padding: 1rem 1.5rem;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.create-product-btn:hover {
+  background: #218838;
+}
+
+.create-product-btn.custom {
+  background: #ef7f47;
+}
+
+.create-product-btn.custom:hover {
+  background: #e56a2e;
 }
 
 @media (max-width: 768px) {

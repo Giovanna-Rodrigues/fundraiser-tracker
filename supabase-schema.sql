@@ -282,7 +282,65 @@ CREATE POLICY "order_items_delete" ON "OrderItemsTable"
 -- WHERE "PK" NOT LIKE 'PRODUCT#%';
 
 -- ============================================
--- 8. INSERT INITIAL PRODUCTS (OPTIONAL)
+-- 8. CREATE PRICE HISTORY TABLE
+-- ============================================
+
+DROP TABLE IF EXISTS "PriceHistoryTable" CASCADE;
+
+CREATE TABLE "PriceHistoryTable" (
+  "PK" TEXT PRIMARY KEY,
+  "SK" TEXT NOT NULL,
+  "ProductId" TEXT REFERENCES "ProductsTable"("PK") ON DELETE CASCADE,
+  "OrderId" TEXT REFERENCES "OrdersTable"("PK"),
+  "Price" NUMERIC(10,2) NOT NULL,
+  "EffectiveDate" TIMESTAMPTZ DEFAULT NOW(),
+  "Notes" TEXT,
+  "CreatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Function to generate PriceHistory PK/SK
+CREATE OR REPLACE FUNCTION generate_price_history_pk()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."PK" IS NULL OR NEW."PK" = '' THEN
+    NEW."PK" := 'PRICEHISTORY#' || uuid_generate_v4();
+  END IF;
+  IF NEW."SK" IS NULL OR NEW."SK" = '' THEN
+    NEW."SK" := NEW."PK";
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for PriceHistoryTable
+DROP TRIGGER IF EXISTS price_history_pk_trigger ON "PriceHistoryTable";
+CREATE TRIGGER price_history_pk_trigger
+  BEFORE INSERT ON "PriceHistoryTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_price_history_pk();
+
+-- Enable RLS on PriceHistoryTable
+ALTER TABLE "PriceHistoryTable" ENABLE ROW LEVEL SECURITY;
+
+-- PriceHistoryTable Policies
+DROP POLICY IF EXISTS "price_history_select" ON "PriceHistoryTable";
+CREATE POLICY "price_history_select" ON "PriceHistoryTable"
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "price_history_insert" ON "PriceHistoryTable";
+CREATE POLICY "price_history_insert" ON "PriceHistoryTable"
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "price_history_update" ON "PriceHistoryTable";
+CREATE POLICY "price_history_update" ON "PriceHistoryTable"
+  FOR UPDATE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "price_history_delete" ON "PriceHistoryTable";
+CREATE POLICY "price_history_delete" ON "PriceHistoryTable"
+  FOR DELETE TO authenticated USING (true);
+
+-- ============================================
+-- 9. INSERT INITIAL PRODUCTS (OPTIONAL)
 -- ============================================
 
 -- Uncomment to insert default products:

@@ -43,6 +43,11 @@ const router = createRouter({
       name: 'cost-calculation',
       component: () => import('../views/CostCalculation.vue'),
     },
+    {
+      path: '/products',
+      name: 'products',
+      component: () => import('../views/ProductsManagement.vue'),
+    },
     // Legacy routes redirect
     {
       path: '/sales',

@@ -14,8 +14,19 @@ export interface Product {
   SK: string
   Name: string
   Price: number
-  Category: 'pizza' | 'pastry' | 'ice-cream'
+  Category: 'pizza' | 'pastry' | 'ice-cream' | 'beverage' | 'combo' | 'other'
   Flavors?: string[]
+  CreatedAt: string
+}
+
+export interface PriceHistory {
+  PK: string // PRICEHISTORY#<uuid>
+  SK: string
+  ProductId: string // PRODUCT#<uuid>
+  OrderId?: string // ORDER#<uuid>
+  Price: number
+  EffectiveDate: string
+  Notes?: string
   CreatedAt: string
 }
 
@@ -175,8 +186,10 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     }
   }
 
-  const updateProduct = async (pk: string, updatedData: Partial<Product>) => {
+  const updateProduct = async (pk: string, updatedData: Partial<Product>, priceNote?: string) => {
     try {
+      const oldProduct = products.value.find(p => p.PK === pk)
+
       const { data, error } = await supabase
         .from('ProductsTable')
         .update(updatedData)
@@ -186,6 +199,17 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
 
       if (error) throw error
 
+      if (oldProduct && updatedData.Price && oldProduct.Price !== updatedData.Price) {
+        await supabase
+          .from('PriceHistoryTable')
+          .insert([{
+            ProductId: pk,
+            Price: updatedData.Price,
+            Notes: priceNote || 'Price updated',
+            EffectiveDate: new Date().toISOString()
+          }])
+      }
+
       const index = products.value.findIndex(p => p.PK === pk)
       if (index !== -1) {
         products.value[index] = data
@@ -193,6 +217,23 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     } catch (error) {
       console.error('Error updating product:', error)
       throw error
+    }
+  }
+
+  const getPriceHistory = async (productId: string): Promise<PriceHistory[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('PriceHistoryTable')
+        .select('*')
+        .eq('ProductId', productId)
+        .order('EffectiveDate', { ascending: false })
+
+      if (error) throw error
+
+      return data || []
+    } catch (error) {
+      console.error('Error getting price history:', error)
+      return []
     }
   }
 
@@ -428,6 +469,7 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     addProduct,
     updateProduct,
     deleteProduct,
+    getPriceHistory,
     addOrder,
     updateOrder,
     updateOrderStatus,
