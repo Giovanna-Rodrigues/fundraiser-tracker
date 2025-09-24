@@ -564,11 +564,14 @@ onMounted(() => {
 .item-name {
   font-weight: 500;
   color: #2c3e50;
+  font-family: monospace;
+  white-space: pre;
 }
 
 .item-flavor {
   font-size: 0.875rem;
   color: #6c757d;
+  margin-left: 2rem;
 }
 
 .item-icons {

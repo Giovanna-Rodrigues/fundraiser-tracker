@@ -104,7 +104,8 @@
                   />
                 </div>
 
-                <div class="field" v-if="getProductFlavors(item.ProductId).length > 0">
+                <!-- Regular Product Flavor Selection -->
+                <div class="field" v-if="!isComboProduct(item.ProductId) && getProductFlavors(item.ProductId).length > 0">
                   <label>Sabor *</label>
                   <Dropdown
                     v-model="item.Flavor"
@@ -138,6 +139,28 @@
                   <label>Total do Item</label>
                   <div class="total-display">
                     <span class="total-value">{{ formatCurrency(item.TotalPrice) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Combo Items Flavor Selection -->
+              <div v-if="isComboProduct(item.ProductId)" class="combo-flavors-section">
+                <h4>Escolha os sabores do combo:</h4>
+                <div v-for="(comboItem, comboIdx) in getComboItems(item.ProductId)" :key="comboIdx" class="combo-flavor-row">
+                  <div class="combo-item-info">
+                    <span class="combo-qty">{{ comboItem.Quantity }}x</span>
+                    <span class="combo-name">{{ getProductName(comboItem.ProductId) }}</span>
+                  </div>
+                  <div v-if="comboItem.AllowFlavorSelection && getProductFlavors(comboItem.ProductId).length > 0" class="combo-flavor-select">
+                    <Dropdown
+                      v-model="item.ComboFlavors[comboIdx]"
+                      :options="getProductFlavors(comboItem.ProductId)"
+                      placeholder="Escolha o sabor"
+                      class="flavor-dropdown"
+                    />
+                  </div>
+                  <div v-else class="no-flavor">
+                    <span class="muted-text">Sem escolha de sabor</span>
                   </div>
                 </div>
               </div>
@@ -216,12 +239,6 @@
               icon="pi pi-times"
               class="p-button-outlined p-button-danger"
               @click="clearForm"
-            />
-            <Button
-              label="Salvar Rascunho"
-              icon="pi pi-save"
-              class="p-button-outlined"
-              @click="saveAsDraft"
             />
             <Button
               label="Confirmar Pedido"
@@ -403,13 +420,24 @@ const getProductFlavors = (productId: string) => {
   return product?.Flavors || []
 }
 
+const isComboProduct = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.Category === 'combo' && product?.ComboItems && product.ComboItems.length > 0
+}
+
+const getComboItems = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.ComboItems || []
+}
+
 const addItem = () => {
   orderForm.value.items.push({
     ProductId: '',
     Quantity: 1,
     Flavor: '',
     UnitPrice: 0,
-    TotalPrice: 0
+    TotalPrice: 0,
+    ComboFlavors: []
   } as any) // Temporary type assertion - will be proper OrderItems on save
 }
 
@@ -425,6 +453,14 @@ const updateItemProduct = (index: number) => {
   if (product) {
     item.UnitPrice = product.Price
     item.Flavor = ''
+
+    // Initialize ComboFlavors array if it's a combo product
+    if (product.Category === 'combo' && product.ComboItems) {
+      item.ComboFlavors = new Array(product.ComboItems.length).fill('')
+    } else {
+      item.ComboFlavors = []
+    }
+
     updateItemTotal(index)
   }
 }
@@ -1012,6 +1048,83 @@ watch(() => orderForm.value.Discount, updateTotal)
 
   .sidebar {
     order: -1;
+  }
+}
+
+.combo-flavors-section {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f0f8ff;
+  border-radius: 0.5rem;
+  border-left: 4px solid var(--primary-color, #ef7f47);
+}
+
+.combo-flavors-section h4 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.combo-flavor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 0.375rem;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.combo-item-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.combo-qty {
+  font-weight: 600;
+  color: var(--primary-color, #ef7f47);
+}
+
+.combo-name {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.combo-flavor-select {
+  flex: 1;
+  max-width: 250px;
+}
+
+.no-flavor {
+  flex: 1;
+  max-width: 250px;
+  text-align: right;
+}
+
+.muted-text {
+  color: #6c757d;
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .combo-flavor-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .combo-flavor-select,
+  .no-flavor {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .no-flavor {
+    text-align: left;
   }
 }
 

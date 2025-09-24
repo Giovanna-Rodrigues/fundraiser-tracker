@@ -68,6 +68,7 @@ const menuItems = [
   { path: '/kitchen', label: 'Cozinha', icon: 'pi pi-stopwatch' },
   { path: '/pathfinders', label: 'Desbravadores', icon: 'pi pi-users' },
   { path: '/products', label: 'Produtos', icon: 'pi pi-box' },
+  { path: '/campaigns', label: 'Campanhas', icon: 'pi pi-flag' },
   { path: '/leaderboard', label: 'Ranking', icon: 'pi pi-trophy' },
   { path: '/cost-calculation', label: 'Custos', icon: 'pi pi-calculator' }
 ]
@@ -98,9 +99,6 @@ const menuItems = [
         </nav>
 
         <div class="nav-actions" v-if="isAuthenticated">
-          <div class="user-info">
-            <span>{{ currentUser?.email }}</span>
-          </div>
           <button class="logout-btn" @click="logout" title="Sair">
             <i class="pi pi-sign-out"></i>
           </button>
@@ -210,14 +208,6 @@ body {
   display: flex;
   align-items: center;
   gap: 1rem;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  color: #6c757d;
-  font-size: 0.9rem;
-  font-weight: 500;
 }
 
 .logout-btn {

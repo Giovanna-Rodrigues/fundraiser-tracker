@@ -9,6 +9,45 @@
           <p>Mini Pizzas e Pastéis - Clube de Desbravadores</p>
         </div>
       </div>
+
+      <!-- Campaign Selector -->
+      <div class="campaign-selector" v-if="fundraiserStore.campaigns.length > 0">
+        <label for="campaignSelect">Campanha:</label>
+        <Dropdown
+          id="campaignSelect"
+          v-model="fundraiserStore.selectedCampaignId"
+          :options="fundraiserStore.campaigns"
+          optionLabel="Name"
+          optionValue="PK"
+          placeholder="Selecione uma campanha"
+          @change="onCampaignChange"
+          class="campaign-dropdown"
+        >
+          <template #value="slotProps">
+            <div v-if="slotProps.value" class="campaign-value">
+              <Tag
+                v-if="getCampaignStatus(slotProps.value) === 'active'"
+                value="ATIVA"
+                severity="success"
+                class="mr-2"
+              />
+              <span>{{ getCampaignName(slotProps.value) }}</span>
+            </div>
+            <span v-else>{{ slotProps.placeholder }}</span>
+          </template>
+          <template #option="slotProps">
+            <div class="campaign-option">
+              <Tag
+                v-if="slotProps.option.Status === 'active'"
+                value="ATIVA"
+                severity="success"
+                class="mr-2"
+              />
+              <span>{{ slotProps.option.Name }}</span>
+            </div>
+          </template>
+        </Dropdown>
+      </div>
     </div>
 
     <!-- Key Metrics Cards -->
@@ -202,10 +241,7 @@ const activePathfindersCount = computed(() => {
   return pathfindersWithOrders.size
 })
 
-const totalProductsSold = computed(() => {
-  // TODO: Calculate from OrderItemsTable when implemented
-  return 0
-})
+const totalProductsSold = computed(() => fundraiserStore.totalProductsSold)
 
 const topPathfinderName = computed(() => {
   return fundraiserStore.topPathfinder?.pathfinder?.Name || 'N/A'
@@ -288,6 +324,20 @@ const formatCurrency = (value: number) => {
   }).format(value || 0)
 }
 
+const getCampaignName = (campaignId: string) => {
+  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
+  return campaign?.Name || ''
+}
+
+const getCampaignStatus = (campaignId: string) => {
+  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
+  return campaign?.Status || ''
+}
+
+const onCampaignChange = () => {
+  // Campaign change is handled reactively by the store
+}
+
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('pt-BR')
 }
@@ -364,6 +414,36 @@ onMounted(() => {
   margin: 0.5rem 0 0 0;
   color: #6c757d;
   font-size: 1.2rem;
+}
+
+.campaign-selector {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.campaign-selector label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.campaign-dropdown {
+  width: 100%;
+  max-width: 400px;
+}
+
+.campaign-value,
+.campaign-option {
+  display: flex;
+  align-items: center;
+}
+
+.mr-2 {
+  margin-right: 0.5rem;
 }
 
 .metrics-grid {

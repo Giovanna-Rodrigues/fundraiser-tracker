@@ -31,8 +31,20 @@
         <div class="product-body">
           <div class="product-price">R$ {{ product.Price.toFixed(2) }}</div>
           <div class="product-category">{{ getCategoryLabel(product.Category) }}</div>
+          <div v-if="product.Description" class="product-description">
+            {{ product.Description }}
+          </div>
           <div v-if="product.Flavors && product.Flavors.length > 0" class="product-flavors">
             <strong>Sabores:</strong> {{ product.Flavors.join(', ') }}
+          </div>
+          <div v-if="product.Category === 'combo' && product.ComboItems && product.ComboItems.length > 0" class="product-combo">
+            <strong>Combo contém:</strong>
+            <ul>
+              <li v-for="(item, idx) in product.ComboItems" :key="idx">
+                {{ item.Quantity }}x {{ getProductName(item.ProductId) }}
+                <span v-if="item.AllowFlavorSelection" class="flavor-tag">✓ Com sabor</span>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -80,7 +92,7 @@
           </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" v-if="productForm.Category !== 'combo'">
           <label>Sabores (separados por vírgula)</label>
           <input
             v-model="flavorsInput"
@@ -88,6 +100,73 @@
             placeholder="Ex: Margherita, Pepperoni, Calabresa"
             class="form-control"
           />
+        </div>
+
+        <div class="form-group">
+          <label>Descrição</label>
+          <textarea
+            v-model="productForm.Description"
+            rows="2"
+            placeholder="Descrição do produto"
+            class="form-control"
+          ></textarea>
+        </div>
+
+        <!-- Combo Items Section -->
+        <div v-if="productForm.Category === 'combo'" class="combo-section">
+          <div class="section-header">
+            <label>Itens do Combo</label>
+            <button type="button" @click="addComboItem" class="btn-sm btn-success">
+              <i class="pi pi-plus"></i> Adicionar Item
+            </button>
+          </div>
+
+          <div v-if="productForm.ComboItems && productForm.ComboItems.length === 0" class="empty-combo">
+            Nenhum item no combo. Clique em "Adicionar Item" para começar.
+          </div>
+
+          <div v-for="(item, index) in productForm.ComboItems" :key="index" class="combo-item">
+            <div class="combo-item-header">
+              <span>Item {{ index + 1 }}</span>
+              <button type="button" @click="removeComboItem(index)" class="btn-icon btn-danger">
+                <i class="pi pi-trash"></i>
+              </button>
+            </div>
+
+            <div class="combo-item-body">
+              <div class="form-group">
+                <label>Produto</label>
+                <select v-model="item.ProductId" class="form-control">
+                  <option value="">Selecione um produto</option>
+                  <option v-for="prod in nonComboProducts" :key="prod.PK" :value="prod.PK">
+                    {{ prod.Name }} - R$ {{ prod.Price.toFixed(2) }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Quantidade</label>
+                  <input
+                    v-model.number="item.Quantity"
+                    type="number"
+                    min="1"
+                    class="form-control"
+                  />
+                </div>
+
+                <div class="form-group checkbox-group">
+                  <label>
+                    <input
+                      v-model="item.AllowFlavorSelection"
+                      type="checkbox"
+                    />
+                    Permitir escolha de sabor
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div v-if="editingProduct" class="form-group">
@@ -174,6 +253,12 @@ interface ProductForm {
   Price: number
   Category: 'pizza' | 'pastry' | 'ice-cream' | 'beverage' | 'combo' | 'other'
   Flavors: string[]
+  Description?: string
+  ComboItems?: Array<{
+    ProductId: string
+    Quantity: number
+    AllowFlavorSelection?: boolean
+  }>
   PriceNote?: string
 }
 
@@ -182,7 +267,13 @@ const productForm = ref<ProductForm>({
   Price: 0,
   Category: 'pizza',
   Flavors: [],
+  Description: '',
+  ComboItems: [],
   PriceNote: ''
+})
+
+const nonComboProducts = computed(() => {
+  return fundraiserStore.products.filter(p => p.Category !== 'combo')
 })
 
 const openProductDialog = (product?: Product) => {
@@ -193,6 +284,8 @@ const openProductDialog = (product?: Product) => {
       Price: product.Price,
       Category: product.Category,
       Flavors: product.Flavors || [],
+      Description: product.Description || '',
+      ComboItems: product.ComboItems ? [...product.ComboItems] : [],
       PriceNote: ''
     }
     flavorsInput.value = product.Flavors?.join(', ') || ''
@@ -203,6 +296,8 @@ const openProductDialog = (product?: Product) => {
       Price: 0,
       Category: 'pizza',
       Flavors: [],
+      Description: '',
+      ComboItems: [],
       PriceNote: ''
     }
     flavorsInput.value = ''
@@ -210,17 +305,45 @@ const openProductDialog = (product?: Product) => {
   showProductDialog.value = true
 }
 
-const saveProduct = async () => {
-  const flavors = flavorsInput.value
-    .split(',')
-    .map(f => f.trim())
-    .filter(f => f.length > 0)
+const addComboItem = () => {
+  if (!productForm.value.ComboItems) {
+    productForm.value.ComboItems = []
+  }
+  productForm.value.ComboItems.push({
+    ProductId: '',
+    Quantity: 1,
+    AllowFlavorSelection: false
+  })
+}
 
-  const productData = {
+const removeComboItem = (index: number) => {
+  productForm.value.ComboItems?.splice(index, 1)
+}
+
+const getProductName = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.Name || 'N/A'
+}
+
+const saveProduct = async () => {
+  const flavors = productForm.value.Category !== 'combo'
+    ? flavorsInput.value
+        .split(',')
+        .map(f => f.trim())
+        .filter(f => f.length > 0)
+    : []
+
+  const productData: any = {
     Name: productForm.value.Name,
     Price: productForm.value.Price,
     Category: productForm.value.Category,
-    Flavors: flavors
+    Flavors: flavors,
+    Description: productForm.value.Description || null
+  }
+
+  // Add combo items if it's a combo product
+  if (productForm.value.Category === 'combo' && productForm.value.ComboItems) {
+    productData.ComboItems = productForm.value.ComboItems.filter(item => item.ProductId)
   }
 
   if (editingProduct.value) {
@@ -511,6 +634,108 @@ onMounted(() => {
   font-size: 0.75rem;
   color: #6c757d;
   margin-top: 0.25rem;
+}
+
+.product-description {
+  font-size: 0.875rem;
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+}
+
+.product-combo {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+}
+
+.product-combo ul {
+  margin: 0.5rem 0 0 1.5rem;
+  padding: 0;
+}
+
+.product-combo li {
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.flavor-tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.125rem 0.5rem;
+  background: #28a745;
+  color: white;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.combo-section {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.section-header label {
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.empty-combo {
+  text-align: center;
+  padding: 2rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.combo-item {
+  background: white;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #dee2e6;
+}
+
+.combo-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #dee2e6;
+  font-weight: 600;
+}
+
+.combo-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
 }
 
 @media (max-width: 768px) {

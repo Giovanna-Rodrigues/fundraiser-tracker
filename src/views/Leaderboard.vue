@@ -18,6 +18,44 @@
       </div>
     </div>
 
+    <!-- Campaign Selector -->
+    <div class="campaign-selector" v-if="fundraiserStore.campaigns.length > 0">
+      <label for="campaignSelect">Filtrar por Campanha:</label>
+      <Dropdown
+        id="campaignSelect"
+        v-model="fundraiserStore.selectedCampaignId"
+        :options="fundraiserStore.campaigns"
+        optionLabel="Name"
+        optionValue="PK"
+        placeholder="Selecione uma campanha"
+        class="campaign-dropdown"
+      >
+        <template #value="slotProps">
+          <div v-if="slotProps.value" class="campaign-value">
+            <Tag
+              v-if="getCampaignStatus(slotProps.value) === 'active'"
+              value="ATIVA"
+              severity="success"
+              class="mr-2"
+            />
+            <span>{{ getCampaignName(slotProps.value) }}</span>
+          </div>
+          <span v-else>{{ slotProps.placeholder }}</span>
+        </template>
+        <template #option="slotProps">
+          <div class="campaign-option">
+            <Tag
+              v-if="slotProps.option.Status === 'active'"
+              value="ATIVA"
+              severity="success"
+              class="mr-2"
+            />
+            <span>{{ slotProps.option.Name }}</span>
+          </div>
+        </template>
+      </Dropdown>
+    </div>
+
     <!-- Top 3 Podium -->
     <div v-if="salesByPathfinder.length > 0" class="podium-section">
       <div class="podium-container">
@@ -249,10 +287,7 @@ const selectedPathfinder = ref<PathfinderSalesData | null>(null)
 const salesByPathfinder = computed(() => fundraiserStore.salesByPathfinder)
 const totalSales = computed(() => fundraiserStore.totalSales)
 
-const totalProductsSold = computed(() => {
-  // TODO: Calculate from OrderItemsTable when implemented
-  return 0
-})
+const totalProductsSold = computed(() => fundraiserStore.totalProductsSold)
 
 const averageSalePerPathfinder = computed(() => {
   if (salesByPathfinder.value.length === 0) return 0
@@ -265,14 +300,22 @@ const pathfinderSales = computed(() => {
   return fundraiserStore.orders
     .filter(order => order.PathfinderId === selectedPathfinder.value!.pathfinder.PK)
     .map(order => {
-      // TODO: Load items from OrderItemsTable
-      const itemsText = 'N/A'
+      // Load items from OrderItemsTable
+      const orderItemsForOrder = fundraiserStore.orderItems.filter(item => item.OrderId === order.PK)
+
+      const itemsText = orderItemsForOrder.map(item => {
+        const product = fundraiserStore.products.find(p => p.PK === item.ProductId)
+        const flavor = item.Flavor ? ` (${item.Flavor})` : ''
+        return `${product?.Name || 'N/A'}${flavor} x${item.Quantity}`
+      }).join(', ') || 'N/A'
+
+      const totalQuantity = orderItemsForOrder.reduce((sum, item) => sum + item.Quantity, 0)
 
       return {
         PK: order.PK,
         Date: order.Date,
         productName: itemsText,
-        Quantity: 0, // TODO: sum from items
+        Quantity: totalQuantity,
         PaymentMethod: order.PaymentMethod,
         TotalAmount: order.TotalAmount,
         CreatedAt: order.CreatedAt
@@ -291,6 +334,16 @@ const formatCurrency = (value: number) => {
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
+const getCampaignName = (campaignId: string) => {
+  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
+  return campaign?.Name || ''
+}
+
+const getCampaignStatus = (campaignId: string) => {
+  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
+  return campaign?.Status || ''
 }
 
 const getRankSeverity = (index: number) => {
@@ -405,6 +458,36 @@ const exportRanking = () => {
 .header-actions {
   display: flex;
   gap: 1rem;
+}
+
+.campaign-selector {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.campaign-selector label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.campaign-dropdown {
+  width: 100%;
+  max-width: 400px;
+}
+
+.campaign-value,
+.campaign-option {
+  display: flex;
+  align-items: center;
+}
+
+.mr-2 {
+  margin-right: 0.5rem;
 }
 
 .podium-section {

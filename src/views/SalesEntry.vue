@@ -320,9 +320,15 @@ const saveSale = async () => {
       TotalAmount: saleForm.value.totalAmount,
       PaymentMethod: paymentMethod as 'card' | 'cash' | 'pix-church' | 'pix-qr',
       Status: 'delivered' as const,
-      Date: saleForm.value.date.toISOString().split('T')[0]
+      Date: saleForm.value.date.toISOString().split('T')[0],
+      items: [{
+        ProductId: saleForm.value.productId!,
+        Quantity: saleForm.value.quantity,
+        Flavor: '',
+        UnitPrice: selectedProduct.value!.Price,
+        TotalPrice: saleForm.value.totalAmount
+      }]
     })
-    // TODO: Save order items to OrderItemsTable
 
     toast.add({
       severity: 'success',
