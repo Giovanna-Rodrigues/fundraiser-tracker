@@ -72,6 +72,14 @@ export interface ProductSalesData {
   orderCount: number
 }
 
+export interface OrderItemWithDetails {
+  ProductId: string
+  Quantity: number
+  Flavor?: string
+  productName: string
+  TotalPrice: number
+}
+
 export const useFundraiserStore = defineStore('fundraiser', () => {
   // State
   const pathfinders = ref<Pathfinder[]>([])
@@ -405,7 +413,7 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
       return {
         ...order,
         pathfinderName: pathfinder?.Name || 'N/A',
-        itemsWithDetails: [] // TODO: Load from OrderItemsTable
+        itemsWithDetails: [] as OrderItemWithDetails[]
       }
     })
   })

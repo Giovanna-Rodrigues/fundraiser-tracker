@@ -225,8 +225,8 @@ const showQuickAddPathfinder = ref(false)
 
 // Form data
 const saleForm = ref({
-  pathfinderId: null as number | null,
-  productId: null as number | null,
+  pathfinderId: null as string | null,
+  productId: null as string | null,
   quantity: 1,
   paymentMethod: null as 'card' | 'pix' | null,
   totalAmount: 0,
@@ -289,10 +289,10 @@ const updateTotalAmount = () => {
 
 const clearForm = () => {
   saleForm.value = {
-    pathfinderId: null,
-    productId: null,
+    pathfinderId: null as string | null,
+    productId: null as string | null,
     quantity: 1,
-    paymentMethod: null,
+    paymentMethod: null as 'card' | 'pix' | null,
     totalAmount: 0,
     date: new Date()
   }
