@@ -11,12 +11,15 @@ const toast = useToast()
 const submitted = ref(false)
 const loading = ref(false)
 const showForgotPassword = ref(false)
-const isSignUp = ref(false)
 
 const loginForm = ref({
   email: '',
   password: '',
   rememberMe: false
+})
+
+const resetPasswordForm = ref({
+  email: ''
 })
 
 const handleLogin = async (event?: Event) => {
@@ -67,36 +70,41 @@ const handleLogin = async (event?: Event) => {
   }
 }
 
-const handleSignUp = async () => {
-  submitted.value = true
 
-  if (!loginForm.value.email || !loginForm.value.password) {
+const handlePasswordReset = async () => {
+  if (!resetPasswordForm.value.email) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Email obrigatório',
+      detail: 'Por favor, digite seu email para recuperar a senha',
+      life: 3000
+    })
     return
   }
 
   loading.value = true
 
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email: loginForm.value.email,
-      password: loginForm.value.password
+    const { error } = await supabase.auth.resetPasswordForEmail(resetPasswordForm.value.email, {
+      redirectTo: `${window.location.origin}/reset-password`
     })
 
     if (error) throw error
 
     toast.add({
       severity: 'success',
-      summary: 'Conta criada',
-      detail: 'Verifique seu email para confirmar',
+      summary: 'Email enviado',
+      detail: 'Verifique seu email para instruções de redefinição de senha',
       life: 5000
     })
 
-    isSignUp.value = false
+    showForgotPassword.value = false
+    resetPasswordForm.value.email = ''
   } catch (error: any) {
     toast.add({
       severity: 'error',
-      summary: 'Erro no cadastro',
-      detail: error.message,
+      summary: 'Erro',
+      detail: error.message || 'Erro ao enviar email de recuperação',
       life: 3000
     })
   } finally {
@@ -114,7 +122,7 @@ const handleSignUp = async () => {
           <div class="logo">
             <i class="pi pi-users"></i>
           </div>
-          <h1>Campanha Desbravadores</h1>
+          <h1>Campanhas Genesis</h1>
           <p>Sistema de Controle de Vendas</p>
         </div>
 
@@ -171,18 +179,11 @@ const handleSignUp = async () => {
 
           <div class="login-actions">
             <Button
-              :label="isSignUp ? 'Cadastrar' : 'Entrar'"
+              label="Entrar"
               class="p-button-primary login-btn"
               :loading="loading"
-              :icon="isSignUp ? 'pi pi-user-plus' : 'pi pi-sign-in'"
-              @click="isSignUp ? handleSignUp() : handleLogin()"
-            />
-          </div>
-          <div class="signup-toggle">
-            <Button
-              :label="isSignUp ? 'Já tem conta? Entrar' : 'Criar nova conta'"
-              class="p-button-link"
-              @click="isSignUp = !isSignUp"
+              icon="pi pi-sign-in"
+              @click="handleLogin()"
             />
           </div>
         </div>
@@ -216,23 +217,32 @@ const handleSignUp = async () => {
       style="width: 400px"
     >
       <div class="dialog-content">
-        <p>Entre em contato com o administrador do sistema para recuperar sua senha.</p>
+        <p>Digite seu email para receber instruções de redefinição de senha.</p>
         <div class="field">
-          <label for="contactEmail">Email para contato</label>
+          <label for="resetEmail">Email</label>
           <InputText
-            id="contactEmail"
-            value="admin@desbravadores.com"
-            readonly
+            id="resetEmail"
+            v-model="resetPasswordForm.email"
+            type="email"
+            placeholder="Digite seu email"
             style="width: 100%"
+            :class="{ 'p-invalid': !resetPasswordForm.email && resetPasswordForm.email !== '' }"
           />
         </div>
       </div>
       <template #footer>
         <Button
-          label="Fechar"
+          label="Cancelar"
           icon="pi pi-times"
           class="p-button-text"
           @click="showForgotPassword = false"
+        />
+        <Button
+          label="Enviar"
+          icon="pi pi-send"
+          class="p-button-primary"
+          :loading="loading"
+          @click="handlePasswordReset"
         />
       </template>
     </Dialog>
@@ -247,7 +257,10 @@ const handleSignUp = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8)), url('/genesis.jpeg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   position: relative;
   overflow: hidden;
 }
@@ -256,14 +269,14 @@ const handleSignUp = async () => {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 400px;
-  padding: 2rem;
+  max-width: 380px;
+  padding: 1rem;
 }
 
 .login-card {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 1rem;
-  padding: 2.5rem;
+  padding: 1.5rem;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -271,49 +284,49 @@ const handleSignUp = async () => {
 
 .login-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .logo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   background: linear-gradient(135deg, var(--primary-color, #ef7f47), #f7a169);
   border-radius: 50%;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   box-shadow: 0 8px 20px rgba(239, 127, 71, 0.3);
 }
 
 .logo i {
-  font-size: 2.5rem;
+  font-size: 2rem;
   color: white;
 }
 
 .login-header h1 {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.25rem;
   color: #2c3e50;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
 }
 
 .login-header p {
   margin: 0;
   color: #6c757d;
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .field label {
@@ -334,29 +347,42 @@ const handleSignUp = async () => {
 }
 
 .login-actions {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 }
 
 .login-btn {
   width: 100%;
-  padding: 0.875rem;
+  padding: 0.75rem;
   font-size: 1rem;
   font-weight: 600;
   border-radius: 0.5rem;
 }
 
 .login-footer {
-  margin-top: 2rem;
+  margin-top: 1.25rem;
 }
 
 .footer-links {
   text-align: center;
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 }
 
-.signup-toggle {
-  text-align: center;
-  margin-top: 1rem;
+.p-inputgroup {
+  width: 100%;
+  display: flex;
+}
+
+.p-inputgroup-addon {
+  min-width: 2.5rem;
+  flex-shrink: 0;
+}
+
+.p-inputgroup-addon i {
+  margin-right: 0.25rem;
+}
+
+.p-inputgroup .p-inputtext {
+  flex: 1;
 }
 
 .background-decoration {

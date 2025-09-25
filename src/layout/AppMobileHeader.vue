@@ -18,7 +18,7 @@ const toggleMenu = () => {
     <div class="mobile-container">
       <div class="mobile-brand">
         <img src="/logo.jpeg" alt="Logo do Clube" class="brand-logo" />
-        <span class="brand-text">Campanha Desbravadores</span>
+        <span class="brand-text">Campanhas Genesis</span>
       </div>
       <button class="mobile-menu-toggle" @click="toggleMenu">
         <i class="pi pi-bars"></i>

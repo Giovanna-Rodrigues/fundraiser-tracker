@@ -9,22 +9,27 @@ const route = useRoute()
 const { isAuthenticated } = useAuth()
 const sidebarCollapsed = ref(false)
 
+// Public routes that should not show menu even if authenticated
+const publicRoutes = ['/login', '/reset-password']
+const isPublicRoute = computed(() => publicRoutes.includes(route.path))
+const shouldShowMenu = computed(() => isAuthenticated.value && !isPublicRoute.value)
+
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
 </script>
 
 <template>
-  <div class="app" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div class="app" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'unauthenticated': !shouldShowMenu }">
     <!-- Sidebar Navigation -->
     <AppSidebar
-      v-if="isAuthenticated"
+      v-if="shouldShowMenu"
       :collapsed="sidebarCollapsed"
       @toggle="toggleSidebar"
     />
 
     <!-- Mobile Navigation -->
-    <AppMobileHeader v-if="isAuthenticated" />
+    <AppMobileHeader v-if="shouldShowMenu" />
 
     <!-- Main Content -->
     <main class="main-content">
@@ -62,6 +67,10 @@ body {
 
 .sidebar-collapsed .main-content {
   margin-left: 70px;
+}
+
+.unauthenticated .main-content {
+  margin-left: 0;
 }
 
 /* ===== RESPONSIVE DESIGN ===== */

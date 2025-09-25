@@ -30,8 +30,9 @@ export const useAuth = () => {
       }
     }
 
-    // Redirect to login if not authenticated
-    if (!currentUser.value && route.path !== '/login') {
+    // Redirect to login if not authenticated (except for public pages)
+    const publicPages = ['/login', '/reset-password']
+    if (!currentUser.value && !publicPages.includes(route.path)) {
       router.push('/login')
     }
   }

@@ -9,6 +9,11 @@ const router = createRouter({
       component: () => import('../views/Login.vue'),
     },
     {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('../views/ResetPassword.vue'),
+    },
+    {
       path: '/',
       name: 'dashboard',
       component: () => import('../views/Dashboard.vue'),
@@ -52,6 +57,11 @@ const router = createRouter({
       path: '/campaigns',
       name: 'campaigns',
       component: () => import('../views/CampaignManagement.vue'),
+    },
+    {
+      path: '/users',
+      name: 'users',
+      component: () => import('../views/UserManagement.vue'),
     },
     // Legacy routes redirect
     {
