@@ -397,7 +397,7 @@ watch(() => orderForm.value.Discount, updateTotal)
                   </div>
                   <div v-if="comboItem.AllowFlavorSelection && getProductFlavors(comboItem.ProductId).length > 0" class="combo-flavor-select">
                     <Dropdown
-                      v-model="item.ComboFlavors[comboIdx]"
+                      v-model="item.ComboFlavors![comboIdx]"
                       :options="getProductFlavors(comboItem.ProductId)"
                       placeholder="Escolha o sabor"
                       class="flavor-dropdown"
