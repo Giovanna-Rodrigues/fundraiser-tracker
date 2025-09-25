@@ -63,11 +63,11 @@
           <p>Os pedidos aparecerão aqui conforme forem sendo feitos.</p>
         </div>
 
-        <div v-for="order in filteredOrders" :key="order.PK" class="order-card" :class="getOrderCardClass(order.Status)">
+        <div v-for="order in filteredOrders" :key="order.PK" class="order-card" :class="getOrderCardClass(getOrderStatus(order.PK))">
           <!-- Order Header -->
           <div class="order-header">
             <div class="order-info">
-              <h4>Pedido #{{ order.PK }}</h4>
+              <h4>Pedido #{{ getOrderNumber(order) }}</h4>
               <div class="order-meta">
                 <span class="customer-name">{{ order.CustomerName }}</span>
                 <span class="pathfinder-name">por {{ order.pathfinderName }}</span>
@@ -75,28 +75,42 @@
             </div>
             <div class="order-actions">
               <Dropdown
-                v-model="order.Status"
+                :model-value="getOrderStatus(order.PK)"
                 :options="statusOptions"
                 optionLabel="label"
                 optionValue="value"
-                @change="updateOrderStatus(order.PK, order.Status)"
-                :class="getStatusClass(order.Status)"
+                @update:model-value="updateOrderStatus(order.PK, $event)"
+                :class="getStatusClass(getOrderStatus(order.PK))"
               />
             </div>
           </div>
 
           <!-- Order Items -->
           <div class="order-items">
-            <div v-for="item in order.itemsWithDetails" :key="`${item.ProductId}-${item.Flavor}`" class="order-item">
-              <div class="item-badge">
+            <div v-for="item in order.itemsWithDetails" :key="`${item.ProductId}-${item.Flavor}`"
+                 class="order-item"
+                 :class="{ 'item-completed': isItemCompleted(order.PK, item) }">
+              <div class="item-badge"
+                   :class="{ 'badge-clickable': true, 'badge-completed': isItemCompleted(order.PK, item) }"
+                   @click="toggleItemCompletion(order.PK, item)"
+                   :title="isItemCompleted(order.PK, item) ? 'Clique para marcar como pendente' : 'Clique para marcar como pronto'">
                 <Badge :value="item.Quantity" />
+                <i v-if="isItemCompleted(order.PK, item)" class="pi pi-check completion-check"></i>
               </div>
               <div class="item-details">
-                <div class="item-name">{{ item.productName }}</div>
-                <div v-if="item.Flavor" class="item-flavor">{{ item.Flavor }}</div>
+                <div class="item-name" :class="{ 'completed-text': isItemCompleted(order.PK, item) }">{{ item.productName }}</div>
+                <div v-if="item.Flavor" class="item-flavor" :class="{ 'completed-text': isItemCompleted(order.PK, item) }">{{ item.Flavor }}</div>
               </div>
-              <div class="item-icons">
-                <i :class="getProductIcon(item.ProductId)" :style="getProductIconColor(item.ProductId)"></i>
+            </div>
+
+            <!-- Progress indicator -->
+            <div class="order-progress">
+              <div class="progress-text">
+                {{ getItemCompletionCount(order.PK).completed }} / {{ getItemCompletionCount(order.PK).total }} itens prontos
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill"
+                     :style="{ width: (getItemCompletionCount(order.PK).completed / getItemCompletionCount(order.PK).total * 100) + '%' }"></div>
               </div>
             </div>
           </div>
@@ -156,7 +170,7 @@
     <!-- Order Details Dialog -->
     <Dialog
       v-model:visible="showDetailsDialog"
-      :header="`Detalhes do Pedido #${selectedOrder?.PK || ''}`"
+      :header="`Detalhes do Pedido #${selectedOrder ? getOrderNumber(selectedOrder) : ''}`"
       :modal="true"
       style="width: 600px"
     >
@@ -254,6 +268,7 @@ const toast = useToast()
 const activeFilter = ref<'all' | 'pending' | 'preparing' | 'ready'>('all')
 const showDetailsDialog = ref(false)
 const selectedOrder = ref<any>(null)
+const completedItems = ref<Record<string, Record<string, boolean>>>({})
 
 // Computed properties
 const allOrders = computed(() => fundraiserStore.kitchenOrders)
@@ -274,6 +289,188 @@ const statusOptions = ref([
 ])
 
 // Methods
+const getOrderNumber = (order: any) => {
+  // Create a short order number from the creation timestamp
+  const date = new Date(order.CreatedAt)
+  const timeNumber = date.getHours().toString().padStart(2, '0') +
+                   date.getMinutes().toString().padStart(2, '0')
+  const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24)
+  return `${dayOfYear.toString().padStart(3, '0')}-${timeNumber}`
+}
+
+const getOrderStatus = (orderId: string) => {
+  // Always get the latest status from the store
+  const storeOrder = fundraiserStore.orders.find(o => o.PK === orderId)
+  return storeOrder?.Status || 'pending'
+}
+
+const getItemId = (item: any) => {
+  return `${item.ProductId}-${item.Flavor || 'no-flavor'}`
+}
+
+const isItemCompleted = (orderId: string, item: any) => {
+  if (!completedItems.value[orderId]) return false
+  const itemId = getItemId(item)
+  return completedItems.value[orderId][itemId] || false
+}
+
+const toggleItemCompletion = (orderId: string, item: any) => {
+
+  if (!completedItems.value[orderId]) {
+    completedItems.value[orderId] = {}
+  }
+
+  const itemId = getItemId(item)
+  const isCompleted = !isItemCompleted(orderId, item)
+  completedItems.value[orderId][itemId] = isCompleted
+
+  // Find the order to get all items
+  const order = allOrders.value.find(o => o.PK === orderId)
+  if (!order) return
+
+  // Handle combo logic
+  if (item.productName.includes('▼')) {
+    // This is a combo header - toggle all its sub-items
+    const comboProductId = item.ProductId
+    order.itemsWithDetails.forEach((orderItem: any) => {
+      if (orderItem.productName.startsWith('  └─') &&
+          orderItem.ProductId !== comboProductId) {
+        // This is a sub-item, find its parent combo
+        const comboItem = order.itemsWithDetails.find((ci: any) =>
+          ci.ProductId === comboProductId && ci.productName.includes('▼')
+        )
+        if (comboItem) {
+          completedItems.value[orderId][getItemId(orderItem)] = isCompleted
+        }
+      }
+    })
+  } else if (item.productName.startsWith('  └─')) {
+    // This is a sub-item - find its specific parent combo and check only those sub-items
+    // Find the combo that this sub-item belongs to by looking backwards in the array
+    let comboItem = null
+    const items = order.itemsWithDetails
+    const currentIndex = items.findIndex(oi => oi === item)
+
+    // Look backwards from current item to find the combo header
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      if (items[i].productName.includes('▼')) {
+        comboItem = items[i]
+        break
+      }
+      // If we hit another regular item (not sub-item), this sub-item is orphaned
+      if (!items[i].productName.startsWith('  └─')) {
+        break
+      }
+    }
+
+    if (comboItem) {
+      // Get only the sub-items that belong to this specific combo
+      // Start from combo position and collect sub-items until we hit non-sub-item
+      const comboIndex = items.findIndex(oi => oi === comboItem)
+      const subItems = []
+
+      for (let i = comboIndex + 1; i < items.length && items[i].productName.startsWith('  └─'); i++) {
+        subItems.push(items[i])
+      }
+
+      const allSubItemsCompleted = subItems.every((subItem: any) => {
+        // Check the current state directly from completedItems to avoid stale reads
+        const itemId = getItemId(subItem)
+        return completedItems.value[orderId]?.[itemId] || false
+      })
+
+      // Update combo status based on sub-items
+      completedItems.value[orderId][getItemId(comboItem)] = allSubItemsCompleted
+    }
+  }
+
+  // Update order status based on item completion
+  updateOrderStatusBasedOnItems(orderId)
+
+  toast.add({
+    severity: isCompleted ? 'success' : 'info',
+    summary: isCompleted ? 'Item Pronto' : 'Item Pendente',
+    detail: `${item.productName.replace('▼', '').replace('  └─ ', '')} ${isCompleted ? 'marcado como pronto' : 'desmarcado'}`,
+    life: 2000
+  })
+}
+
+const getItemCompletionCount = (orderId: string) => {
+  const order = allOrders.value.find(o => o.PK === orderId)
+  if (!order) return { completed: 0, total: 0 }
+
+  // Count all items INCLUDING sub-items individually for progress tracking
+  const allItems = order.itemsWithDetails
+  let completed = 0
+  let total = 0
+
+  // Process each item individually
+  for (let i = 0; i < allItems.length; i++) {
+    const item = allItems[i]
+
+    if (item.productName.includes('▼')) {
+      // This is a combo header - don't count it, only the sub-items matter
+    } else if (item.productName.startsWith('  └─')) {
+      // This is a sub-item - count it individually
+      total += 1
+      const itemId = getItemId(item)
+      const itemCompleted = completedItems.value[orderId]?.[itemId] || false
+      if (itemCompleted) {
+        completed += 1
+      }
+    } else {
+      // This is a regular item (not a combo, not a sub-item)
+      total += 1
+      const itemId = getItemId(item)
+      const itemCompleted = completedItems.value[orderId]?.[itemId] || false
+      if (itemCompleted) {
+        completed += 1
+      }
+    }
+  }
+
+  return { completed, total }
+}
+
+const updateOrderStatusBasedOnItems = async (orderId: string) => {
+  const order = allOrders.value.find(o => o.PK === orderId)
+  if (!order) return
+
+  const { completed, total } = getItemCompletionCount(orderId)
+
+  // Determine new status based solely on item completion
+  let newStatus: Order['Status']
+
+  if (completed === 0) {
+    // No items completed - set to pending
+    newStatus = 'pending'
+  } else if (completed === total) {
+    // All items completed - set to ready
+    newStatus = 'ready'
+  } else if (completed > 0 && completed < total) {
+    // Some items completed - set to preparing
+    newStatus = 'preparing'
+  } else {
+    // Fallback to current status (shouldn't happen)
+    newStatus = order.Status
+  }
+
+  // Only update if status changed
+  if (newStatus !== order.Status) {
+    try {
+      await fundraiserStore.updateOrderStatus(orderId, newStatus)
+
+      const statusLabels: Record<string, string> = {
+        'pending': 'pendente',
+        'preparing': 'em preparo',
+        'ready': 'pronto'
+      }
+    } catch (error) {
+      console.error('Error updating order status:', error)
+    }
+  }
+}
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -514,6 +711,16 @@ onMounted(() => {
   margin-bottom: 1rem;
 }
 
+.order-actions {
+  flex-shrink: 0;
+  min-width: 140px;
+}
+
+.order-actions :deep(.p-dropdown) {
+  width: 140px;
+  font-size: 0.875rem;
+}
+
 .order-info h4 {
   margin: 0 0 0.25rem 0;
   color: #2c3e50;
@@ -555,6 +762,77 @@ onMounted(() => {
 
 .item-badge {
   flex-shrink: 0;
+}
+
+.badge-clickable {
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.badge-clickable:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.badge-completed {
+  background: #28a745;
+  color: white;
+  border-radius: 50%;
+}
+
+.completion-check {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #28a745;
+  color: white;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.item-completed {
+  opacity: 0.7;
+}
+
+.completed-text {
+  text-decoration: line-through;
+  color: #6c757d;
+}
+
+.order-progress {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f8f9fa;
+}
+
+.progress-text {
+  font-size: 0.875rem;
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #28a745, #20c997);
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }
 
 .item-details {

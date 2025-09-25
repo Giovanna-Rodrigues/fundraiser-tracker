@@ -2,10 +2,7 @@
   <div class="products-management">
     <div class="page-header">
       <h1>Gestão de Produtos</h1>
-      <button @click="openProductDialog()" class="btn-primary">
-        <i class="pi pi-plus"></i>
-        Novo Produto
-      </button>
+      <Button @click="openProductDialog()" icon="pi pi-plus" label="Novo Produto" />
     </div>
 
     <div class="products-grid">
@@ -17,15 +14,28 @@
         <div class="product-header">
           <h3>{{ product.Name }}</h3>
           <div class="product-actions">
-            <button @click="viewPriceHistory(product)" class="btn-icon" title="Ver histórico de preços">
-              <i class="pi pi-history"></i>
-            </button>
-            <button @click="openProductDialog(product)" class="btn-icon" title="Editar">
-              <i class="pi pi-pencil"></i>
-            </button>
-            <button @click="confirmDeleteProduct(product)" class="btn-icon btn-danger" title="Excluir">
-              <i class="pi pi-trash"></i>
-            </button>
+            <Button
+              @click="viewPriceHistory(product)"
+              icon="pi pi-history"
+              text
+              rounded
+              aria-label="Ver histórico de preços"
+            />
+            <Button
+              @click="openProductDialog(product)"
+              icon="pi pi-pencil"
+              text
+              rounded
+              aria-label="Editar"
+            />
+            <Button
+              @click="confirmDeleteProduct(product)"
+              icon="pi pi-trash"
+              text
+              rounded
+              severity="danger"
+              aria-label="Excluir"
+            />
           </div>
         </div>
         <div class="product-body">
@@ -116,9 +126,13 @@
         <div v-if="productForm.Category === 'combo'" class="combo-section">
           <div class="section-header">
             <label>Itens do Combo</label>
-            <button type="button" @click="addComboItem" class="btn-sm btn-success">
-              <i class="pi pi-plus"></i> Adicionar Item
-            </button>
+            <Button
+              @click="addComboItem"
+              icon="pi pi-plus"
+              label="Adicionar Item"
+              size="small"
+              severity="success"
+            />
           </div>
 
           <div v-if="productForm.ComboItems && productForm.ComboItems.length === 0" class="empty-combo">
@@ -128,9 +142,15 @@
           <div v-for="(item, index) in productForm.ComboItems" :key="index" class="combo-item">
             <div class="combo-item-header">
               <span>Item {{ index + 1 }}</span>
-              <button type="button" @click="removeComboItem(index)" class="btn-icon btn-danger">
-                <i class="pi pi-trash"></i>
-              </button>
+              <Button
+                @click="removeComboItem(index)"
+                icon="pi pi-trash"
+                text
+                rounded
+                severity="danger"
+                size="small"
+                aria-label="Remover item"
+              />
             </div>
 
             <div class="combo-item-body">
@@ -181,8 +201,8 @@
       </div>
 
       <template #footer>
-        <button @click="showProductDialog = false" class="btn-secondary">Cancelar</button>
-        <button @click="saveProduct" class="btn-primary">Salvar</button>
+        <Button @click="showProductDialog = false" label="Cancelar" text />
+        <Button @click="saveProduct" label="Salvar" />
       </template>
     </Dialog>
 
@@ -221,8 +241,8 @@
     >
       <p>Tem certeza que deseja excluir o produto <strong>{{ productToDelete?.Name }}</strong>?</p>
       <template #footer>
-        <button @click="showDeleteDialog = false" class="btn-secondary">Cancelar</button>
-        <button @click="deleteProduct" class="btn-danger">Excluir</button>
+        <Button @click="showDeleteDialog = false" label="Cancelar" text />
+        <Button @click="deleteProduct" label="Excluir" severity="danger" />
       </template>
     </Dialog>
   </div>
@@ -234,6 +254,7 @@ import { useRoute } from 'vue-router'
 import { useFundraiserStore } from '@/stores/fundraiser'
 import type { Product } from '@/stores/fundraiser'
 import Dialog from 'primevue/dialog'
+import Button from 'primevue/button'
 
 const route = useRoute()
 const fundraiserStore = useFundraiserStore()
@@ -500,62 +521,7 @@ onMounted(() => {
   margin-top: 0.5rem;
 }
 
-.btn-primary {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #ef7f47;
-  color: white;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.btn-primary:hover {
-  background: #e56a2e;
-}
-
-.btn-secondary {
-  padding: 0.75rem 1.5rem;
-  background: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.btn-secondary:hover {
-  background: #5a6268;
-}
-
-.btn-icon {
-  background: transparent;
-  border: none;
-  color: #6c757d;
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  transition: all 0.2s ease;
-}
-
-.btn-icon:hover {
-  background: #f8f9fa;
-  color: #2c3e50;
-}
-
-.btn-danger {
-  color: #dc3545;
-}
-
-.btn-danger:hover {
-  background: #ffe6e8;
-  color: #dc3545;
-}
+/* Custom button styles removed - now using PrimeVue Button components */
 
 .product-form {
   display: flex;

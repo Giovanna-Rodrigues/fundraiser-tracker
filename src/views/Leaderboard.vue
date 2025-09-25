@@ -298,7 +298,10 @@ const pathfinderSales = computed(() => {
   if (!selectedPathfinder.value) return []
 
   return fundraiserStore.orders
-    .filter(order => order.PathfinderId === selectedPathfinder.value!.pathfinder.PK)
+    .filter(order =>
+      order.PathfinderId === selectedPathfinder.value!.pathfinder.PK &&
+      order.CampaignId === fundraiserStore.selectedCampaignId
+    )
     .map(order => {
       // Load items from OrderItemsTable
       const orderItemsForOrder = fundraiserStore.orderItems.filter(item => item.OrderId === order.PK)
