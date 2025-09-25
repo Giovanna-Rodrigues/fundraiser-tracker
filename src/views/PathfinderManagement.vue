@@ -1,118 +1,3 @@
-<template>
-  <div class="pathfinder-management">
-    <div class="header-section">
-      <h2>Gerenciar Desbravadores</h2>
-      <div class="header-actions">
-        <Button
-          label="Novo Desbravador"
-          icon="pi pi-plus"
-          @click="showAddDialog = true"
-        />
-        <Button
-          label="Voltar ao Dashboard"
-          icon="pi pi-arrow-left"
-          class="p-button-outlined"
-          @click="$router.push('/')"
-        />
-      </div>
-    </div>
-
-    <div class="content-card">
-      <DataTable
-        :value="pathfinders"
-        :paginator="true"
-        :rows="10"
-        dataKey="PK"
-        :loading="loading"
-        class="p-datatable-gridlines"
-      >
-        <Column field="Name" header="Nome" sortable></Column>
-        <Column field="CreatedAt" header="Cadastrado em" sortable>
-          <template #body="{ data }">
-            {{ formatDate(data.CreatedAt) }}
-          </template>
-        </Column>
-        <Column header="Ações" style="width: 8rem">
-          <template #body="{ data }">
-            <div class="action-buttons">
-              <Button
-                icon="pi pi-pencil"
-                class="p-button-rounded p-button-success p-button-sm"
-                @click="editPathfinder(data)"
-              />
-              <Button
-                icon="pi pi-trash"
-                class="p-button-rounded p-button-danger p-button-sm"
-                @click="confirmDeletePathfinder(data)"
-              />
-            </div>
-          </template>
-        </Column>
-      </DataTable>
-    </div>
-
-    <!-- Add/Edit Dialog -->
-    <Dialog
-      v-model:visible="showAddDialog"
-      :header="editingPathfinder ? 'Editar Desbravador' : 'Novo Desbravador'"
-      :modal="true"
-      style="width: 450px"
-    >
-      <div class="dialog-content">
-        <div class="field">
-          <label for="name">Nome *</label>
-          <InputText
-            id="name"
-            v-model="pathfinderForm.Name"
-            :class="{ 'p-invalid': submitted && !pathfinderForm.Name }"
-            style="width: 100%"
-          />
-          <small v-if="submitted && !pathfinderForm.Name" class="p-error">Nome é obrigatório.</small>
-        </div>
-
-      </div>
-
-      <template #footer>
-        <Button label="Cancelar" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
-        <Button label="Salvar" icon="pi pi-check" @click="savePathfinder" />
-      </template>
-    </Dialog>
-
-    <!-- Confirm Delete Dialog -->
-    <Dialog
-      v-model:visible="deletePathfinderDialog"
-      style="width: 450px"
-      header="Confirmar"
-      :modal="true"
-    >
-      <div class="confirmation-content">
-        <i class="pi pi-exclamation-triangle"></i>
-        <span v-if="pathfinderToDelete">
-          Tem certeza que deseja excluir <b>{{ pathfinderToDelete.Name }}</b>?
-          <br />
-          <small class="warning-text">Todas as vendas associadas também serão removidas.</small>
-        </span>
-      </div>
-      <template #footer>
-        <Button
-          label="Não"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="deletePathfinderDialog = false"
-        />
-        <Button
-          label="Sim"
-          icon="pi pi-check"
-          class="p-button-text"
-          @click="deletePathfinderConfirmed"
-        />
-      </template>
-    </Dialog>
-
-    <Toast />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useFundraiserStore } from '@/stores/fundraiser'
@@ -228,11 +113,122 @@ const deletePathfinderConfirmed = async () => {
   deletePathfinderDialog.value = false
   pathfinderToDelete.value = null
 }
-
-onMounted(async () => {
-  // Data is already loaded from Supabase in the store
-})
 </script>
+
+<template>
+  <div class="pathfinder-management">
+    <div class="header-section">
+      <h2>Gerenciar Desbravadores</h2>
+      <div class="header-actions">
+        <Button
+          label="Novo Desbravador"
+          icon="pi pi-plus"
+          @click="showAddDialog = true"
+        />
+        <Button
+          label="Voltar ao Dashboard"
+          icon="pi pi-arrow-left"
+          class="p-button-outlined"
+          @click="$router.push('/')"
+        />
+      </div>
+    </div>
+
+    <div class="content-card">
+      <DataTable
+        :value="pathfinders"
+        :paginator="true"
+        :rows="10"
+        dataKey="PK"
+        :loading="loading"
+        class="p-datatable-gridlines"
+      >
+        <Column field="Name" header="Nome" sortable></Column>
+        <Column field="CreatedAt" header="Cadastrado em" sortable>
+          <template #body="{ data }">
+            {{ formatDate(data.CreatedAt) }}
+          </template>
+        </Column>
+        <Column header="Ações" style="width: 8rem">
+          <template #body="{ data }">
+            <div class="action-buttons">
+              <Button
+                icon="pi pi-pencil"
+                class="p-button-rounded p-button-success p-button-sm"
+                @click="editPathfinder(data)"
+              />
+              <Button
+                icon="pi pi-trash"
+                class="p-button-rounded p-button-danger p-button-sm"
+                @click="confirmDeletePathfinder(data)"
+              />
+            </div>
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+
+    <!-- Add/Edit Dialog -->
+    <Dialog
+      v-model:visible="showAddDialog"
+      :header="editingPathfinder ? 'Editar Desbravador' : 'Novo Desbravador'"
+      :modal="true"
+      style="width: 450px"
+    >
+      <div class="dialog-content">
+        <div class="field">
+          <label for="name">Nome *</label>
+          <InputText
+            id="name"
+            v-model="pathfinderForm.Name"
+            :class="{ 'p-invalid': submitted && !pathfinderForm.Name }"
+            style="width: 100%"
+          />
+          <small v-if="submitted && !pathfinderForm.Name" class="p-error">Nome é obrigatório.</small>
+        </div>
+
+      </div>
+
+      <template #footer>
+        <Button label="Cancelar" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
+        <Button label="Salvar" icon="pi pi-check" @click="savePathfinder" />
+      </template>
+    </Dialog>
+
+    <!-- Confirm Delete Dialog -->
+    <Dialog
+      v-model:visible="deletePathfinderDialog"
+      style="width: 450px"
+      header="Confirmar"
+      :modal="true"
+    >
+      <div class="confirmation-content">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span v-if="pathfinderToDelete">
+          Tem certeza que deseja excluir <b>{{ pathfinderToDelete.Name }}</b>?
+          <br />
+          <small class="warning-text">Todas as vendas associadas também serão removidas.</small>
+        </span>
+      </div>
+      <template #footer>
+        <Button
+          label="Não"
+          icon="pi pi-times"
+          class="p-button-text"
+          @click="deletePathfinderDialog = false"
+        />
+        <Button
+          label="Sim"
+          icon="pi pi-check"
+          class="p-button-text"
+          @click="deletePathfinderConfirmed"
+        />
+      </template>
+    </Dialog>
+
+    <Toast />
+  </div>
+</template>
 
 <style scoped>
 .pathfinder-management {

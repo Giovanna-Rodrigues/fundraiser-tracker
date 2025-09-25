@@ -1,3 +1,110 @@
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
+import { supabase } from '@/lib/supabase'
+
+const router = useRouter()
+const toast = useToast()
+
+const submitted = ref(false)
+const loading = ref(false)
+const showForgotPassword = ref(false)
+const isSignUp = ref(false)
+
+const loginForm = ref({
+  email: '',
+  password: '',
+  rememberMe: false
+})
+
+const handleLogin = async (event?: Event) => {
+  if (event) {
+    event.preventDefault()
+  }
+  submitted.value = true
+
+  if (!loginForm.value.email || !loginForm.value.password) {
+    return
+  }
+
+  loading.value = true
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: loginForm.value.email,
+      password: loginForm.value.password
+    })
+
+    if (error) throw error
+
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify({
+        email: data.user.email,
+        id: data.user.id,
+        loginTime: new Date().toISOString()
+      }))
+
+      toast.add({
+        severity: 'success',
+        summary: 'Login realizado',
+        detail: `Bem-vindo!`,
+        life: 3000
+      })
+
+      router.push('/')
+    }
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro de login',
+      detail: error.message || 'Credenciais inválidas',
+      life: 3000
+    })
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSignUp = async () => {
+  submitted.value = true
+
+  if (!loginForm.value.email || !loginForm.value.password) {
+    return
+  }
+
+  loading.value = true
+
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: loginForm.value.email,
+      password: loginForm.value.password
+    })
+
+    if (error) throw error
+
+    toast.add({
+      severity: 'success',
+      summary: 'Conta criada',
+      detail: 'Verifique seu email para confirmar',
+      life: 5000
+    })
+
+    isSignUp.value = false
+  } catch (error: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro no cadastro',
+      detail: error.message,
+      life: 3000
+    })
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
 <template>
   <div class="login-page">
     <div class="login-container">
@@ -133,112 +240,6 @@
     <Toast />
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useToast } from 'primevue/usetoast'
-import { supabase } from '@/lib/supabase'
-
-const router = useRouter()
-const toast = useToast()
-
-const submitted = ref(false)
-const loading = ref(false)
-const showForgotPassword = ref(false)
-const isSignUp = ref(false)
-
-const loginForm = ref({
-  email: '',
-  password: '',
-  rememberMe: false
-})
-
-const handleLogin = async (event?: Event) => {
-  if (event) {
-    event.preventDefault()
-  }
-  submitted.value = true
-
-  if (!loginForm.value.email || !loginForm.value.password) {
-    return
-  }
-
-  loading.value = true
-
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: loginForm.value.email,
-      password: loginForm.value.password
-    })
-
-    if (error) throw error
-
-    if (data.user) {
-      localStorage.setItem('user', JSON.stringify({
-        email: data.user.email,
-        id: data.user.id,
-        loginTime: new Date().toISOString()
-      }))
-
-      toast.add({
-        severity: 'success',
-        summary: 'Login realizado',
-        detail: `Bem-vindo!`,
-        life: 3000
-      })
-
-      router.push('/')
-    }
-  } catch (error: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro de login',
-      detail: error.message || 'Credenciais inválidas',
-      life: 3000
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleSignUp = async () => {
-  submitted.value = true
-
-  if (!loginForm.value.email || !loginForm.value.password) {
-    return
-  }
-
-  loading.value = true
-
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email: loginForm.value.email,
-      password: loginForm.value.password
-    })
-
-    if (error) throw error
-
-    toast.add({
-      severity: 'success',
-      summary: 'Conta criada',
-      detail: 'Verifique seu email para confirmar',
-      life: 5000
-    })
-
-    isSignUp.value = false
-  } catch (error: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro no cadastro',
-      detail: error.message,
-      life: 3000
-    })
-  } finally {
-    loading.value = false
-  }
-}
-</script>
 
 <style scoped>
 .login-page {

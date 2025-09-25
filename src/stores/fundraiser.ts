@@ -9,6 +9,12 @@ export interface Pathfinder {
   CreatedAt: string
 }
 
+export interface ComboItem {
+  ProductId: string
+  Quantity: number
+  AllowFlavorSelection?: boolean
+}
+
 export interface Product {
   PK: string // PRODUCT#<uuid>
   SK: string
@@ -16,6 +22,8 @@ export interface Product {
   Price: number
   Category: 'pizza' | 'pastry' | 'ice-cream' | 'beverage' | 'combo' | 'other'
   Flavors?: string[]
+  Description?: string
+  ComboItems?: ComboItem[]
   CreatedAt: string
 }
 
@@ -42,6 +50,18 @@ export interface OrderItem {
   CreatedAt: string
 }
 
+export interface Campaign {
+  PK: string // CAMPAIGN#<uuid>
+  SK: string
+  Name: string
+  StartDate: string
+  EndDate: string
+  Status: 'planned' | 'active' | 'completed'
+  Goal?: number
+  Description?: string
+  CreatedAt: string
+}
+
 export interface Order {
   PK: string // ORDER#<uuid>
   SK: string
@@ -55,6 +75,7 @@ export interface Order {
   Status: 'pending' | 'preparing' | 'ready' | 'delivered'
   Date: string
   Notes?: string
+  CampaignId?: string // CAMPAIGN#<uuid>
   CreatedAt: string
 }
 
@@ -85,6 +106,9 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
   const pathfinders = ref<Pathfinder[]>([])
   const orders = ref<Order[]>([])
   const products = ref<Product[]>([])
+  const orderItems = ref<OrderItem[]>([])
+  const campaigns = ref<Campaign[]>([])
+  const selectedCampaignId = ref<string | null>(null)
 
   // Load data from Supabase
   const loadFromSupabase = async () => {
@@ -112,6 +136,31 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
 
       if (ordersError) throw ordersError
       orders.value = ordersData || []
+
+      // Load order items
+      const { data: orderItemsData, error: orderItemsError } = await supabase
+        .from('OrderItemsTable')
+        .select('*')
+
+      if (orderItemsError) throw orderItemsError
+      orderItems.value = orderItemsData || []
+
+      // Load campaigns
+      const { data: campaignsData, error: campaignsError } = await supabase
+        .from('CampaignsTable')
+        .select('*')
+        .order('StartDate', { ascending: false })
+
+      if (campaignsError) throw campaignsError
+      campaigns.value = campaignsData || []
+
+      // Set selected campaign to active campaign if available
+      const activeCampaign = campaigns.value.find(c => c.Status === 'active')
+      if (activeCampaign) {
+        selectedCampaignId.value = activeCampaign.PK
+      } else if (campaigns.value.length > 0) {
+        selectedCampaignId.value = campaigns.value[0].PK
+      }
     } catch (error) {
       console.error('Error loading data from Supabase:', error)
     }
@@ -261,10 +310,107 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     }
   }
 
+  // Campaign management
+  const addCampaign = async (campaign: Omit<Campaign, 'PK' | 'SK' | 'CreatedAt'>) => {
+    try {
+      // If this campaign is being set as active, deactivate all other campaigns
+      if (campaign.Status === 'active') {
+        await supabase
+          .from('CampaignsTable')
+          .update({ Status: 'completed' })
+          .eq('Status', 'active')
+      }
+
+      const { data, error } = await supabase
+        .from('CampaignsTable')
+        .insert([campaign])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      campaigns.value.unshift(data)
+
+      // Set as selected campaign if active
+      if (data.Status === 'active') {
+        selectedCampaignId.value = data.PK
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error adding campaign:', error)
+      throw error
+    }
+  }
+
+  const updateCampaign = async (pk: string, updatedData: Partial<Campaign>) => {
+    try {
+      // If updating to active status, deactivate all other campaigns
+      if (updatedData.Status === 'active') {
+        await supabase
+          .from('CampaignsTable')
+          .update({ Status: 'completed' })
+          .eq('Status', 'active')
+          .neq('PK', pk)
+      }
+
+      const { data, error } = await supabase
+        .from('CampaignsTable')
+        .update(updatedData)
+        .eq('PK', pk)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const index = campaigns.value.findIndex(c => c.PK === pk)
+      if (index !== -1) {
+        campaigns.value[index] = data
+      }
+
+      // Update selected campaign if this became active
+      if (data.Status === 'active') {
+        selectedCampaignId.value = data.PK
+      }
+    } catch (error) {
+      console.error('Error updating campaign:', error)
+      throw error
+    }
+  }
+
+  const deleteCampaign = async (pk: string) => {
+    try {
+      const { error } = await supabase
+        .from('CampaignsTable')
+        .delete()
+        .eq('PK', pk)
+
+      if (error) throw error
+
+      campaigns.value = campaigns.value.filter(c => c.PK !== pk)
+
+      // If deleted campaign was selected, select another
+      if (selectedCampaignId.value === pk) {
+        const activeCampaign = campaigns.value.find(c => c.Status === 'active')
+        selectedCampaignId.value = activeCampaign?.PK || campaigns.value[0]?.PK || null
+      }
+    } catch (error) {
+      console.error('Error deleting campaign:', error)
+      throw error
+    }
+  }
+
+  const setSelectedCampaign = (campaignId: string | null) => {
+    selectedCampaignId.value = campaignId
+  }
+
   // Order management
-  const addOrder = async (order: Omit<Order, 'PK' | 'SK' | 'CreatedAt'>) => {
+  const addOrder = async (order: Omit<Order, 'PK' | 'SK' | 'CreatedAt'> & { items?: any[] }) => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
+
+      // Get active campaign or use provided CampaignId
+      const campaignId = order.CampaignId || selectedCampaignId.value
 
       const { data, error } = await supabase
         .from('OrdersTable')
@@ -278,7 +424,8 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
           PaymentMethod: order.PaymentMethod,
           Status: order.Status || 'pending',
           Date: order.Date || new Date().toISOString().split('T')[0],
-          Notes: order.Notes
+          Notes: order.Notes,
+          CampaignId: campaignId
         }])
         .select()
         .single()
@@ -286,6 +433,28 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
       if (error) throw error
 
       orders.value.push(data)
+
+      // Save order items if provided
+      if (order.items && order.items.length > 0) {
+        const itemsToInsert = order.items.map(item => ({
+          OrderId: data.PK,
+          ProductId: item.ProductId,
+          Quantity: item.Quantity,
+          Flavor: item.Flavor || null,
+          UnitPrice: item.UnitPrice,
+          TotalPrice: item.TotalPrice
+        }))
+
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('OrderItemsTable')
+          .insert(itemsToInsert)
+          .select()
+
+        if (itemsError) throw itemsError
+
+        orderItems.value.push(...itemsData)
+      }
+
       return data
     } catch (error) {
       console.error('Error adding order:', error)
@@ -335,25 +504,37 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
   }
 
   // Computed properties for statistics
-  const totalSales = computed(() => {
-    return orders.value.reduce((total, order) => total + order.TotalAmount, 0)
+  const filteredOrders = computed(() => {
+    if (!selectedCampaignId.value) return orders.value
+    return orders.value.filter(o => o.CampaignId === selectedCampaignId.value)
   })
 
-  const totalOrders = computed(() => orders.value.length)
+  const totalSales = computed(() => {
+    return filteredOrders.value.reduce((total, order) => total + order.TotalAmount, 0)
+  })
+
+  const totalOrders = computed(() => filteredOrders.value.length)
+
+  const totalProductsSold = computed(() => {
+    const orderIds = new Set(filteredOrders.value.map(o => o.PK))
+    return orderItems.value
+      .filter(item => orderIds.has(item.OrderId))
+      .reduce((sum, item) => sum + item.Quantity, 0)
+  })
 
   const ordersByStatus = computed(() => {
     return {
-      pending: orders.value.filter(o => o.Status === 'pending').length,
-      preparing: orders.value.filter(o => o.Status === 'preparing').length,
-      ready: orders.value.filter(o => o.Status === 'ready').length,
-      delivered: orders.value.filter(o => o.Status === 'delivered').length
+      pending: filteredOrders.value.filter(o => o.Status === 'pending').length,
+      preparing: filteredOrders.value.filter(o => o.Status === 'preparing').length,
+      ready: filteredOrders.value.filter(o => o.Status === 'ready').length,
+      delivered: filteredOrders.value.filter(o => o.Status === 'delivered').length
     }
   })
 
   const salesByPathfinder = computed((): PathfinderSalesData[] => {
     const salesMap = new Map<string, PathfinderSalesData>()
 
-    orders.value.forEach(order => {
+    filteredOrders.value.forEach(order => {
       const pathfinder = pathfinders.value.find(p => p.PK === order.PathfinderId)
       if (pathfinder) {
         const existing = salesMap.get(order.PathfinderId) || {
@@ -364,8 +545,12 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
         }
 
         existing.totalAmount += order.TotalAmount
-        // Note: We'll need to load order items separately or join them
-        existing.totalQuantity += 0 // TODO: Load from OrderItemsTable
+
+        // Calculate total quantity from order items
+        const orderItemsForThisOrder = orderItems.value.filter(item => item.OrderId === order.PK)
+        const quantityForThisOrder = orderItemsForThisOrder.reduce((sum, item) => sum + item.Quantity, 0)
+        existing.totalQuantity += quantityForThisOrder
+
         existing.orderCount += 1
 
         salesMap.set(order.PathfinderId, existing)
@@ -376,14 +561,36 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
   })
 
   const salesByProduct = computed((): ProductSalesData[] => {
-    // TODO: This needs to load from OrderItemsTable
-    return []
+    const salesMap = new Map<string, ProductSalesData>()
+    const orderIds = new Set(filteredOrders.value.map(o => o.PK))
+
+    orderItems.value
+      .filter(item => orderIds.has(item.OrderId))
+      .forEach(item => {
+        const product = products.value.find(p => p.PK === item.ProductId)
+        if (product) {
+          const existing = salesMap.get(item.ProductId) || {
+            product,
+            totalQuantity: 0,
+            totalAmount: 0,
+            orderCount: 0
+          }
+
+          existing.totalQuantity += item.Quantity
+          existing.totalAmount += item.TotalPrice
+          existing.orderCount += 1
+
+          salesMap.set(item.ProductId, existing)
+        }
+      })
+
+    return Array.from(salesMap.values()).sort((a, b) => b.totalQuantity - a.totalQuantity)
   })
 
   const salesByPaymentMethod = computed(() => {
     const paymentMap = { card: 0, cash: 0, 'pix-church': 0, 'pix-qr': 0 }
 
-    orders.value.forEach(order => {
+    filteredOrders.value.forEach(order => {
       paymentMap[order.PaymentMethod] += order.TotalAmount
     })
 
@@ -395,7 +602,7 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
   })
 
   const recentOrders = computed(() => {
-    return orders.value
+    return filteredOrders.value
       .map(order => {
         const pathfinder = pathfinders.value.find(p => p.PK === order.PathfinderId)
         return {
@@ -410,10 +617,60 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
   const ordersWithDetails = computed(() => {
     return orders.value.map(order => {
       const pathfinder = pathfinders.value.find(p => p.PK === order.PathfinderId)
+
+      // Get order items for this order
+      const orderItemsForOrder = orderItems.value.filter(item => item.OrderId === order.PK)
+
+      // Expand combo items
+      const expandedItems: OrderItemWithDetails[] = []
+
+      orderItemsForOrder.forEach(item => {
+        const product = products.value.find(p => p.PK === item.ProductId)
+
+        if (product) {
+          // Check if it's a combo
+          if (product.Category === 'combo' && product.ComboItems && product.ComboItems.length > 0) {
+            // Add combo header
+            expandedItems.push({
+              ProductId: item.ProductId,
+              Quantity: item.Quantity,
+              Flavor: item.Flavor,
+              productName: `${product.Name} ▼`,
+              TotalPrice: item.TotalPrice
+            })
+
+            // Add each combo item as sub-item
+            product.ComboItems.forEach((comboItem, idx) => {
+              const comboProduct = products.value.find(p => p.PK === comboItem.ProductId)
+              const comboFlavor = (item as any).ComboFlavors?.[idx] || ''
+
+              if (comboProduct) {
+                expandedItems.push({
+                  ProductId: comboProduct.PK,
+                  Quantity: comboItem.Quantity * item.Quantity, // Multiply by order quantity
+                  Flavor: comboFlavor,
+                  productName: `  └─ ${comboProduct.Name}`,
+                  TotalPrice: 0 // Sub-items don't have individual prices
+                })
+              }
+            })
+          } else {
+            // Regular product
+            expandedItems.push({
+              ProductId: item.ProductId,
+              Quantity: item.Quantity,
+              Flavor: item.Flavor,
+              productName: product.Name,
+              TotalPrice: item.TotalPrice
+            })
+          }
+        }
+      })
+
       return {
         ...order,
         pathfinderName: pathfinder?.Name || 'N/A',
-        itemsWithDetails: [] as OrderItemWithDetails[]
+        itemsWithDetails: expandedItems
       }
     })
   })
@@ -424,10 +681,15 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
       .sort((a, b) => new Date(a.CreatedAt).getTime() - new Date(b.CreatedAt).getTime())
   })
 
+  // Helpers
+  const activeCampaign = computed(() => campaigns.value.find(c => c.Status === 'active'))
+  const selectedCampaign = computed(() => campaigns.value.find(c => c.PK === selectedCampaignId.value))
+
   // Export data for spreadsheet
   const exportToCSV = () => {
+    const campaignName = selectedCampaign.value?.Name || 'Todas'
     const headers = ['Data', 'Pedido #', 'Desbravador', 'Cliente', 'Subtotal', 'Desconto', 'Total', 'Forma de Pagamento', 'Status']
-    const rows = orders.value.map(order => {
+    const rows = filteredOrders.value.map(order => {
       const pathfinder = pathfinders.value.find(p => p.PK === order.PathfinderId)
 
       const paymentText = {
@@ -457,7 +719,7 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `pedidos_desbravadores_${new Date().toISOString().split('T')[0]}.csv`
+    link.download = `pedidos_${campaignName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`
     link.click()
   }
 
@@ -469,6 +731,9 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     pathfinders,
     orders,
     products,
+    orderItems,
+    campaigns,
+    selectedCampaignId,
 
     // Actions
     addPathfinder,
@@ -478,6 +743,10 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     updateProduct,
     deleteProduct,
     getPriceHistory,
+    addCampaign,
+    updateCampaign,
+    deleteCampaign,
+    setSelectedCampaign,
     addOrder,
     updateOrder,
     updateOrderStatus,
@@ -488,6 +757,7 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     // Computed
     totalSales,
     totalOrders,
+    totalProductsSold,
     ordersByStatus,
     salesByPathfinder,
     salesByProduct,
@@ -495,6 +765,8 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     topPathfinder,
     recentOrders,
     ordersWithDetails,
-    kitchenOrders
+    kitchenOrders,
+    activeCampaign,
+    selectedCampaign
   }
 })

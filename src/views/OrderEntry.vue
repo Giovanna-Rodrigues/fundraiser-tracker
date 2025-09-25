@@ -1,336 +1,3 @@
-<template>
-  <div class="order-entry">
-    <div class="container">
-      <div class="header-section">
-        <h2>📝 Novo Pedido</h2>
-        <Button
-          label="Voltar ao Dashboard"
-          icon="pi pi-arrow-left"
-          class="p-button-outlined"
-          @click="$router.push('/')"
-        />
-      </div>
-
-      <div class="order-form">
-        <div class="form-section">
-          <!-- Customer Info -->
-          <div class="info-card">
-            <h3>Informações do Cliente</h3>
-            <div class="form-grid">
-              <div class="field">
-                <label for="pathfinder">Desbravador *</label>
-                <Dropdown
-                  id="pathfinder"
-                  v-model="orderForm.PathfinderId"
-                  :options="pathfinderOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder="Selecione um desbravador"
-                  :class="{ 'p-invalid': submitted && !orderForm.PathfinderId }"
-                  :filter="true"
-                  filterBy="label"
-                />
-                <small v-if="submitted && !orderForm.PathfinderId" class="p-error">
-                  Desbravador é obrigatório.
-                </small>
-              </div>
-
-              <div class="field">
-                <label for="customerName">Nome do Cliente *</label>
-                <InputText
-                  id="customerName"
-                  v-model="orderForm.CustomerName"
-                  placeholder="Nome de quem vai retirar o pedido"
-                  :class="{ 'p-invalid': submitted && !orderForm.CustomerName }"
-                />
-                <small v-if="submitted && !orderForm.CustomerName" class="p-error">
-                  Nome do cliente é obrigatório.
-                </small>
-              </div>
-
-              <div class="field">
-                <label for="date">Data do Pedido *</label>
-                <Calendar
-                  id="date"
-                  v-model="orderForm.Date"
-                  dateFormat="dd/mm/yy"
-                  :class="{ 'p-invalid': submitted && !orderForm.Date }"
-                />
-              </div>
-            </div>
-          </div>
-
-          <!-- Order Items -->
-          <div class="items-card">
-            <div class="items-header">
-              <h3>Itens do Pedido</h3>
-              <Button
-                label="Adicionar Item"
-                icon="pi pi-plus"
-                class="p-button-success p-button-sm"
-                @click="addItem"
-              />
-            </div>
-
-            <div v-if="orderForm.items.length === 0" class="empty-items">
-              <i class="pi pi-shopping-cart"></i>
-              <p>Nenhum item adicionado. Clique em "Adicionar Item" para começar.</p>
-            </div>
-
-            <div v-for="(item, index) in orderForm.items" :key="index" class="item-row">
-              <div class="item-header">
-                <div class="item-number">
-                  <i class="pi pi-shopping-cart"></i>
-                  <span>Item {{ index + 1 }}</span>
-                </div>
-                <Button
-                  icon="pi pi-trash"
-                  class="p-button-danger p-button-text p-button-sm remove-btn"
-                  @click="removeItem(index)"
-                  :disabled="orderForm.items.length <= 1"
-                />
-              </div>
-
-              <div class="item-grid">
-                <div class="field">
-                  <label>Produto *</label>
-                  <Dropdown
-                    v-model="item.ProductId"
-                    :options="productOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Selecione um produto"
-                    @update:modelValue="updateItemProduct(index)"
-                  />
-                </div>
-
-                <div class="field" v-if="getProductFlavors(item.ProductId).length > 0">
-                  <label>Sabor *</label>
-                  <Dropdown
-                    v-model="item.Flavor"
-                    :options="getProductFlavors(item.ProductId)"
-                    placeholder="Selecione o sabor"
-                  />
-                </div>
-
-                <div class="field">
-                  <label>Quantidade *</label>
-                  <InputNumber
-                    v-model="item.Quantity"
-                    :min="1"
-                    :max="99"
-                    @update:modelValue="updateItemTotal(index)"
-                  />
-                </div>
-
-                <div class="field">
-                  <label>Preço Unitário</label>
-                  <InputNumber
-                    v-model="item.UnitPrice"
-                    mode="currency"
-                    currency="BRL"
-                    locale="pt-BR"
-                    :disabled="true"
-                  />
-                </div>
-
-                <div class="field total-field">
-                  <label>Total do Item</label>
-                  <div class="total-display">
-                    <span class="total-value">{{ formatCurrency(item.TotalPrice) }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Payment & Summary -->
-          <div class="payment-card">
-            <h3>Pagamento e Total</h3>
-            <div class="payment-grid">
-              <div class="field">
-                <label>Subtotal</label>
-                <InputNumber
-                  v-model="orderForm.Subtotal"
-                  mode="currency"
-                  currency="BRL"
-                  locale="pt-BR"
-                  :disabled="true"
-                />
-              </div>
-
-              <div class="field">
-                <label for="discount">Desconto (R$)</label>
-                <InputNumber
-                  id="discount"
-                  v-model="orderForm.Discount"
-                  mode="currency"
-                  currency="BRL"
-                  locale="pt-BR"
-                  :min="0"
-                  :max="orderForm.Subtotal"
-                  @input="updateTotal"
-                />
-              </div>
-
-              <div class="field total-field">
-                <label>Total Final</label>
-                <InputNumber
-                  v-model="orderForm.TotalAmount"
-                  mode="currency"
-                  currency="BRL"
-                  locale="pt-BR"
-                  :disabled="true"
-                  class="total-amount"
-                />
-              </div>
-
-              <div class="field">
-                <label for="paymentMethod">Forma de Pagamento *</label>
-                <Dropdown
-                  id="paymentMethod"
-                  v-model="orderForm.PaymentMethod"
-                  :options="paymentOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder="Selecione a forma de pagamento"
-                  :class="{ 'p-invalid': submitted && !orderForm.PaymentMethod }"
-                />
-              </div>
-
-              <div class="field full-width">
-                <label for="notes">Observações</label>
-                <InputText
-                  id="notes"
-                  v-model="orderForm.Notes"
-                  placeholder="Observações adicionais (opcional)"
-                />
-              </div>
-            </div>
-          </div>
-
-          <!-- Form Actions -->
-          <div class="form-actions">
-            <Button
-              label="Limpar Pedido"
-              icon="pi pi-times"
-              class="p-button-outlined p-button-danger"
-              @click="clearForm"
-            />
-            <Button
-              label="Salvar Rascunho"
-              icon="pi pi-save"
-              class="p-button-outlined"
-              @click="saveAsDraft"
-            />
-            <Button
-              label="Confirmar Pedido"
-              icon="pi pi-check"
-              class="p-button-success"
-              @click="saveOrder"
-            />
-          </div>
-        </div>
-
-        <!-- Sidebar Summary -->
-        <div class="sidebar">
-          <div class="summary-card">
-            <h4>Resumo do Pedido</h4>
-            <div v-if="orderForm.items.length === 0" class="empty-summary">
-              <p>Adicione itens para ver o resumo</p>
-            </div>
-            <div v-else class="summary-content">
-              <div class="summary-items">
-                <div v-for="(item, index) in orderForm.items" :key="index" class="summary-item">
-                  <div class="item-info">
-                    <span class="item-name">{{ getProductName(item.ProductId) }}</span>
-                    <span v-if="item.Flavor" class="item-flavor">{{ item.Flavor }}</span>
-                  </div>
-                  <div class="item-details">
-                    <span class="item-qty">{{ item.Quantity }}x</span>
-                    <span class="item-price">{{ formatCurrency(item.TotalPrice) }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <Divider />
-
-              <div class="summary-totals">
-                <div class="total-row">
-                  <span>Subtotal:</span>
-                  <span>{{ formatCurrency(orderForm.Subtotal) }}</span>
-                </div>
-                <div v-if="orderForm.Discount > 0" class="total-row discount">
-                  <span>Desconto:</span>
-                  <span>-{{ formatCurrency(orderForm.Discount) }}</span>
-                </div>
-                <div class="total-row final">
-                  <span>Total:</span>
-                  <span>{{ formatCurrency(orderForm.TotalAmount) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Quick Add Pathfinder -->
-          <div class="quick-actions-card">
-            <h4>Ações Rápidas</h4>
-            <div class="quick-actions">
-              <Button
-                label="Novo Desbravador"
-                icon="pi pi-user-plus"
-                class="p-button-outlined action-btn"
-                @click="showQuickAddPathfinder = true"
-              />
-              <Button
-                label="Ver Cozinha"
-                icon="pi pi-home"
-                class="p-button-outlined action-btn"
-                @click="$router.push('/kitchen')"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Add Pathfinder Dialog -->
-    <Dialog
-      v-model:visible="showQuickAddPathfinder"
-      header="Adicionar Desbravador Rapidamente"
-      :modal="true"
-      style="width: 400px"
-    >
-      <div class="dialog-content">
-        <div class="field">
-          <label for="quickName">Nome *</label>
-          <InputText
-            id="quickName"
-            v-model="quickPathfinderForm.Name"
-            :class="{ 'p-invalid': quickSubmitted && !quickPathfinderForm.Name }"
-            style="width: 100%"
-          />
-          <small v-if="quickSubmitted && !quickPathfinderForm.Name" class="p-error">
-            Nome é obrigatório.
-          </small>
-        </div>
-      </div>
-
-      <template #footer>
-        <Button
-          label="Cancelar"
-          icon="pi pi-times"
-          class="p-button-text"
-          @click="showQuickAddPathfinder = false"
-        />
-        <Button label="Adicionar" icon="pi pi-check" @click="saveQuickPathfinder" />
-      </template>
-    </Dialog>
-
-    <Toast />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useFundraiserStore } from '@/stores/fundraiser'
@@ -403,13 +70,24 @@ const getProductFlavors = (productId: string) => {
   return product?.Flavors || []
 }
 
+const isComboProduct = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.Category === 'combo' && product?.ComboItems && product.ComboItems.length > 0
+}
+
+const getComboItems = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.ComboItems || []
+}
+
 const addItem = () => {
   orderForm.value.items.push({
     ProductId: '',
     Quantity: 1,
     Flavor: '',
     UnitPrice: 0,
-    TotalPrice: 0
+    TotalPrice: 0,
+    ComboFlavors: []
   } as any) // Temporary type assertion - will be proper OrderItems on save
 }
 
@@ -425,6 +103,14 @@ const updateItemProduct = (index: number) => {
   if (product) {
     item.UnitPrice = product.Price
     item.Flavor = ''
+
+    // Initialize ComboFlavors array if it's a combo product
+    if (product.Category === 'combo' && product.ComboItems) {
+      item.ComboFlavors = new Array(product.ComboItems.length).fill('')
+    } else {
+      item.ComboFlavors = []
+    }
+
     updateItemTotal(index)
   }
 }
@@ -555,6 +241,356 @@ const saveQuickPathfinder = async () => {
 // Watchers
 watch(() => orderForm.value.Discount, updateTotal)
 </script>
+
+<template>
+  <div class="order-entry">
+    <div class="container">
+      <div class="header-section">
+        <h2>📝 Novo Pedido</h2>
+        <Button
+          label="Voltar ao Dashboard"
+          icon="pi pi-arrow-left"
+          class="p-button-outlined"
+          @click="$router.push('/')"
+        />
+      </div>
+
+      <div class="order-form">
+        <div class="form-section">
+          <!-- Customer Info -->
+          <div class="info-card">
+            <h3>Informações do Cliente</h3>
+            <div class="form-grid">
+              <div class="field">
+                <label for="pathfinder">Desbravador *</label>
+                <Dropdown
+                  id="pathfinder"
+                  v-model="orderForm.PathfinderId"
+                  :options="pathfinderOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="Selecione um desbravador"
+                  :class="{ 'p-invalid': submitted && !orderForm.PathfinderId }"
+                  :filter="true"
+                  filterBy="label"
+                />
+                <small v-if="submitted && !orderForm.PathfinderId" class="p-error">
+                  Desbravador é obrigatório.
+                </small>
+              </div>
+
+              <div class="field">
+                <label for="customerName">Nome do Cliente *</label>
+                <InputText
+                  id="customerName"
+                  v-model="orderForm.CustomerName"
+                  placeholder="Nome de quem vai retirar o pedido"
+                  :class="{ 'p-invalid': submitted && !orderForm.CustomerName }"
+                />
+                <small v-if="submitted && !orderForm.CustomerName" class="p-error">
+                  Nome do cliente é obrigatório.
+                </small>
+              </div>
+
+              <div class="field">
+                <label for="date">Data do Pedido *</label>
+                <Calendar
+                  id="date"
+                  v-model="orderForm.Date"
+                  dateFormat="dd/mm/yy"
+                  :class="{ 'p-invalid': submitted && !orderForm.Date }"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Order Items -->
+          <div class="items-card">
+            <div class="items-header">
+              <h3>Itens do Pedido</h3>
+              <Button
+                label="Adicionar Item"
+                icon="pi pi-plus"
+                class="p-button-success p-button-sm"
+                @click="addItem"
+              />
+            </div>
+
+            <div v-if="orderForm.items.length === 0" class="empty-items">
+              <i class="pi pi-shopping-cart"></i>
+              <p>Nenhum item adicionado. Clique em "Adicionar Item" para começar.</p>
+            </div>
+
+            <div v-for="(item, index) in orderForm.items" :key="index" class="item-row">
+              <div class="item-header">
+                <div class="item-number">
+                  <i class="pi pi-shopping-cart"></i>
+                  <span>Item {{ index + 1 }}</span>
+                </div>
+                <Button
+                  icon="pi pi-trash"
+                  class="p-button-danger p-button-text p-button-sm remove-btn"
+                  @click="removeItem(index)"
+                  :disabled="orderForm.items.length <= 1"
+                />
+              </div>
+
+              <div class="item-grid">
+                <div class="field">
+                  <label>Produto *</label>
+                  <Dropdown
+                    v-model="item.ProductId"
+                    :options="productOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    placeholder="Selecione um produto"
+                    @update:modelValue="updateItemProduct(index)"
+                  />
+                </div>
+
+                <!-- Regular Product Flavor Selection -->
+                <div class="field" v-if="!isComboProduct(item.ProductId) && getProductFlavors(item.ProductId).length > 0">
+                  <label>Sabor *</label>
+                  <Dropdown
+                    v-model="item.Flavor"
+                    :options="getProductFlavors(item.ProductId)"
+                    placeholder="Selecione o sabor"
+                  />
+                </div>
+
+                <div class="field">
+                  <label>Quantidade *</label>
+                  <InputNumber
+                    v-model="item.Quantity"
+                    :min="1"
+                    :max="99"
+                    @update:modelValue="updateItemTotal(index)"
+                  />
+                </div>
+
+                <div class="field">
+                  <label>Preço Unitário</label>
+                  <InputNumber
+                    v-model="item.UnitPrice"
+                    mode="currency"
+                    currency="BRL"
+                    locale="pt-BR"
+                    :disabled="true"
+                  />
+                </div>
+
+                <div class="field total-field">
+                  <label>Total do Item</label>
+                  <div class="total-display">
+                    <span class="total-value">{{ formatCurrency(item.TotalPrice) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Combo Items Flavor Selection -->
+              <div v-if="isComboProduct(item.ProductId)" class="combo-flavors-section">
+                <h4>Escolha os sabores do combo:</h4>
+                <div v-for="(comboItem, comboIdx) in getComboItems(item.ProductId)" :key="comboIdx" class="combo-flavor-row">
+                  <div class="combo-item-info">
+                    <span class="combo-qty">{{ comboItem.Quantity }}x</span>
+                    <span class="combo-name">{{ getProductName(comboItem.ProductId) }}</span>
+                  </div>
+                  <div v-if="comboItem.AllowFlavorSelection && getProductFlavors(comboItem.ProductId).length > 0" class="combo-flavor-select">
+                    <Dropdown
+                      v-model="item.ComboFlavors[comboIdx]"
+                      :options="getProductFlavors(comboItem.ProductId)"
+                      placeholder="Escolha o sabor"
+                      class="flavor-dropdown"
+                    />
+                  </div>
+                  <div v-else class="no-flavor">
+                    <span class="muted-text">Sem escolha de sabor</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payment & Summary -->
+          <div class="payment-card">
+            <h3>Pagamento e Total</h3>
+            <div class="payment-grid">
+              <div class="field">
+                <label>Subtotal</label>
+                <InputNumber
+                  v-model="orderForm.Subtotal"
+                  mode="currency"
+                  currency="BRL"
+                  locale="pt-BR"
+                  :disabled="true"
+                />
+              </div>
+
+              <div class="field">
+                <label for="discount">Desconto (R$)</label>
+                <InputNumber
+                  id="discount"
+                  v-model="orderForm.Discount"
+                  mode="currency"
+                  currency="BRL"
+                  locale="pt-BR"
+                  :min="0"
+                  :max="orderForm.Subtotal"
+                  @input="updateTotal"
+                />
+              </div>
+
+              <div class="field total-field">
+                <label>Total Final</label>
+                <InputNumber
+                  v-model="orderForm.TotalAmount"
+                  mode="currency"
+                  currency="BRL"
+                  locale="pt-BR"
+                  :disabled="true"
+                  class="total-amount"
+                />
+              </div>
+
+              <div class="field">
+                <label for="paymentMethod">Forma de Pagamento *</label>
+                <Dropdown
+                  id="paymentMethod"
+                  v-model="orderForm.PaymentMethod"
+                  :options="paymentOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="Selecione a forma de pagamento"
+                  :class="{ 'p-invalid': submitted && !orderForm.PaymentMethod }"
+                />
+              </div>
+
+              <div class="field full-width">
+                <label for="notes">Observações</label>
+                <InputText
+                  id="notes"
+                  v-model="orderForm.Notes"
+                  placeholder="Observações adicionais (opcional)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="form-actions">
+            <Button
+              label="Limpar Pedido"
+              icon="pi pi-times"
+              class="p-button-outlined p-button-danger"
+              @click="clearForm"
+            />
+            <Button
+              label="Confirmar Pedido"
+              icon="pi pi-check"
+              class="p-button-success"
+              @click="saveOrder"
+            />
+          </div>
+        </div>
+
+        <!-- Sidebar Summary -->
+        <div class="sidebar">
+          <div class="summary-card">
+            <h4>Resumo do Pedido</h4>
+            <div v-if="orderForm.items.length === 0" class="empty-summary">
+              <p>Adicione itens para ver o resumo</p>
+            </div>
+            <div v-else class="summary-content">
+              <div class="summary-items">
+                <div v-for="(item, index) in orderForm.items" :key="index" class="summary-item">
+                  <div class="item-info">
+                    <span class="item-name">{{ getProductName(item.ProductId) }}</span>
+                    <span v-if="item.Flavor" class="item-flavor">{{ item.Flavor }}</span>
+                  </div>
+                  <div class="item-details">
+                    <span class="item-qty">{{ item.Quantity }}x</span>
+                    <span class="item-price">{{ formatCurrency(item.TotalPrice) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <Divider />
+
+              <div class="summary-totals">
+                <div class="total-row">
+                  <span>Subtotal:</span>
+                  <span>{{ formatCurrency(orderForm.Subtotal) }}</span>
+                </div>
+                <div v-if="orderForm.Discount > 0" class="total-row discount">
+                  <span>Desconto:</span>
+                  <span>-{{ formatCurrency(orderForm.Discount) }}</span>
+                </div>
+                <div class="total-row final">
+                  <span>Total:</span>
+                  <span>{{ formatCurrency(orderForm.TotalAmount) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Add Pathfinder -->
+          <div class="quick-actions-card">
+            <h4>Ações Rápidas</h4>
+            <div class="quick-actions">
+              <Button
+                label="Novo Desbravador"
+                icon="pi pi-user-plus"
+                class="p-button-outlined action-btn"
+                @click="showQuickAddPathfinder = true"
+              />
+              <Button
+                label="Ver Cozinha"
+                icon="pi pi-home"
+                class="p-button-outlined action-btn"
+                @click="$router.push('/kitchen')"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Add Pathfinder Dialog -->
+    <Dialog
+      v-model:visible="showQuickAddPathfinder"
+      header="Adicionar Desbravador Rapidamente"
+      :modal="true"
+      style="width: 400px"
+    >
+      <div class="dialog-content">
+        <div class="field">
+          <label for="quickName">Nome *</label>
+          <InputText
+            id="quickName"
+            v-model="quickPathfinderForm.Name"
+            :class="{ 'p-invalid': quickSubmitted && !quickPathfinderForm.Name }"
+            style="width: 100%"
+          />
+          <small v-if="quickSubmitted && !quickPathfinderForm.Name" class="p-error">
+            Nome é obrigatório.
+          </small>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button
+          label="Cancelar"
+          icon="pi pi-times"
+          class="p-button-text"
+          @click="showQuickAddPathfinder = false"
+        />
+        <Button label="Adicionar" icon="pi pi-check" @click="saveQuickPathfinder" />
+      </template>
+    </Dialog>
+
+    <Toast />
+  </div>
+</template>
 
 <style scoped>
 .order-entry {
@@ -1012,6 +1048,83 @@ watch(() => orderForm.value.Discount, updateTotal)
 
   .sidebar {
     order: -1;
+  }
+}
+
+.combo-flavors-section {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f0f8ff;
+  border-radius: 0.5rem;
+  border-left: 4px solid var(--primary-color, #ef7f47);
+}
+
+.combo-flavors-section h4 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.combo-flavor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 0.375rem;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.combo-item-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.combo-qty {
+  font-weight: 600;
+  color: var(--primary-color, #ef7f47);
+}
+
+.combo-name {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.combo-flavor-select {
+  flex: 1;
+  max-width: 250px;
+}
+
+.no-flavor {
+  flex: 1;
+  max-width: 250px;
+  text-align: right;
+}
+
+.muted-text {
+  color: #6c757d;
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .combo-flavor-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .combo-flavor-select,
+  .no-flavor {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .no-flavor {
+    text-align: left;
   }
 }
 

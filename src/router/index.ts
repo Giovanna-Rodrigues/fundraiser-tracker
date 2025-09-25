@@ -48,6 +48,11 @@ const router = createRouter({
       name: 'products',
       component: () => import('../views/ProductsManagement.vue'),
     },
+    {
+      path: '/campaigns',
+      name: 'campaigns',
+      component: () => import('../views/CampaignManagement.vue'),
+    },
     // Legacy routes redirect
     {
       path: '/sales',

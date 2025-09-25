@@ -1,3 +1,150 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useFundraiserStore } from '@/stores/fundraiser'
+import { useToast } from 'primevue/usetoast'
+
+// Store and utilities
+const fundraiserStore = useFundraiserStore()
+const toast = useToast()
+
+// Computed properties for metrics
+const totalSales = computed(() => fundraiserStore.totalSales)
+const totalSalesCount = computed(() => fundraiserStore.totalOrders)
+const totalPathfindersCount = computed(() => fundraiserStore.pathfinders.length)
+
+const activePathfindersCount = computed(() => {
+  const pathfindersWithOrders = new Set(fundraiserStore.orders.map(order => order.PathfinderId))
+  return pathfindersWithOrders.size
+})
+
+const totalProductsSold = computed(() => fundraiserStore.totalProductsSold)
+
+const topPathfinderName = computed(() => {
+  return fundraiserStore.topPathfinder?.pathfinder?.Name || 'N/A'
+})
+
+const topPathfinderSales = computed(() => {
+  return fundraiserStore.topPathfinder?.totalAmount || 0
+})
+
+const topPathfinders = computed(() => {
+  return fundraiserStore.salesByPathfinder.slice(0, 5)
+})
+
+const recentSales = computed(() => {
+  return fundraiserStore.recentOrders.slice(0, 10)
+})
+
+// Chart data
+const paymentMethodChartData = computed(() => {
+  const paymentData = fundraiserStore.salesByPaymentMethod
+  return {
+    labels: ['Cartão', 'Dinheiro', 'Pix Igreja', 'Pix QR'],
+    datasets: [
+      {
+        data: [paymentData.card, paymentData.cash, paymentData['pix-church'], paymentData['pix-qr']],
+        backgroundColor: ['#42A5F5', '#66BB6A', '#FFA726', '#AB47BC'],
+        hoverBackgroundColor: ['#64B5F6', '#81C784', '#FFB74D', '#BA68C8']
+      }
+    ]
+  }
+})
+
+const productSalesChartData = computed(() => {
+  const productData = fundraiserStore.salesByProduct
+  return {
+    labels: productData.map(item => item.product.Name),
+    datasets: [
+      {
+        label: 'Quantidade Vendida',
+        backgroundColor: '#42A5F5',
+        data: productData.map(item => item.totalQuantity)
+      }
+    ]
+  }
+})
+
+// Chart options
+const chartOptions = ref({
+  plugins: {
+    legend: {
+      labels: {
+        usePointStyle: true
+      }
+    }
+  },
+  responsive: true,
+  maintainAspectRatio: false
+})
+
+const barChartOptions = ref({
+  plugins: {
+    legend: {
+      display: false
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true
+    }
+  },
+  responsive: true,
+  maintainAspectRatio: false
+})
+
+// Methods
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value || 0)
+}
+
+const getCampaignName = (campaignId: string) => {
+  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
+  return campaign?.Name || ''
+}
+
+const getCampaignStatus = (campaignId: string) => {
+  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
+  return campaign?.Status || ''
+}
+
+const onCampaignChange = () => {
+  // Campaign change is handled reactively by the store
+}
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
+const getRankSeverity = (index: number) => {
+  if (index === 0) return 'warning' // Gold
+  if (index === 1) return 'secondary' // Silver
+  if (index === 2) return 'info' // Bronze
+  return 'primary'
+}
+
+const exportData = () => {
+  try {
+    fundraiserStore.exportToCSV()
+    toast.add({
+      severity: 'success',
+      summary: 'Sucesso',
+      detail: 'Relatório exportado com sucesso!',
+      life: 3000
+    })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro',
+      detail: 'Erro ao exportar relatório',
+      life: 3000
+    })
+  }
+}
+</script>
+
 <template>
   <div class="dashboard">
     <!-- Header with Club Logo -->
@@ -8,6 +155,45 @@
           <h1>Campanha de Arrecadação</h1>
           <p>Mini Pizzas e Pastéis - Clube de Desbravadores</p>
         </div>
+      </div>
+
+      <!-- Campaign Selector -->
+      <div class="campaign-selector" v-if="fundraiserStore.campaigns.length > 0">
+        <label for="campaignSelect">Campanha:</label>
+        <Dropdown
+          id="campaignSelect"
+          v-model="fundraiserStore.selectedCampaignId"
+          :options="fundraiserStore.campaigns"
+          optionLabel="Name"
+          optionValue="PK"
+          placeholder="Selecione uma campanha"
+          @change="onCampaignChange"
+          class="campaign-dropdown"
+        >
+          <template #value="slotProps">
+            <div v-if="slotProps.value" class="campaign-value">
+              <Tag
+                v-if="getCampaignStatus(slotProps.value) === 'active'"
+                value="ATIVA"
+                severity="success"
+                class="mr-2"
+              />
+              <span>{{ getCampaignName(slotProps.value) }}</span>
+            </div>
+            <span v-else>{{ slotProps.placeholder }}</span>
+          </template>
+          <template #option="slotProps">
+            <div class="campaign-option">
+              <Tag
+                v-if="slotProps.option.Status === 'active'"
+                value="ATIVA"
+                severity="success"
+                class="mr-2"
+              />
+              <span>{{ slotProps.option.Name }}</span>
+            </div>
+          </template>
+        </Dropdown>
       </div>
     </div>
 
@@ -183,146 +369,6 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useFundraiserStore } from '@/stores/fundraiser'
-import { useToast } from 'primevue/usetoast'
-
-// Store and utilities
-const fundraiserStore = useFundraiserStore()
-const toast = useToast()
-
-// Computed properties for metrics
-const totalSales = computed(() => fundraiserStore.totalSales)
-const totalSalesCount = computed(() => fundraiserStore.totalOrders)
-const totalPathfindersCount = computed(() => fundraiserStore.pathfinders.length)
-
-const activePathfindersCount = computed(() => {
-  const pathfindersWithOrders = new Set(fundraiserStore.orders.map(order => order.PathfinderId))
-  return pathfindersWithOrders.size
-})
-
-const totalProductsSold = computed(() => {
-  // TODO: Calculate from OrderItemsTable when implemented
-  return 0
-})
-
-const topPathfinderName = computed(() => {
-  return fundraiserStore.topPathfinder?.pathfinder?.Name || 'N/A'
-})
-
-const topPathfinderSales = computed(() => {
-  return fundraiserStore.topPathfinder?.totalAmount || 0
-})
-
-const topPathfinders = computed(() => {
-  return fundraiserStore.salesByPathfinder.slice(0, 5)
-})
-
-const recentSales = computed(() => {
-  return fundraiserStore.recentOrders.slice(0, 10)
-})
-
-// Chart data
-const paymentMethodChartData = computed(() => {
-  const paymentData = fundraiserStore.salesByPaymentMethod
-  return {
-    labels: ['Cartão', 'Dinheiro', 'Pix Igreja', 'Pix QR'],
-    datasets: [
-      {
-        data: [paymentData.card, paymentData.cash, paymentData['pix-church'], paymentData['pix-qr']],
-        backgroundColor: ['#42A5F5', '#66BB6A', '#FFA726', '#AB47BC'],
-        hoverBackgroundColor: ['#64B5F6', '#81C784', '#FFB74D', '#BA68C8']
-      }
-    ]
-  }
-})
-
-const productSalesChartData = computed(() => {
-  const productData = fundraiserStore.salesByProduct
-  return {
-    labels: productData.map(item => item.product.Name),
-    datasets: [
-      {
-        label: 'Quantidade Vendida',
-        backgroundColor: '#42A5F5',
-        data: productData.map(item => item.totalQuantity)
-      }
-    ]
-  }
-})
-
-// Chart options
-const chartOptions = ref({
-  plugins: {
-    legend: {
-      labels: {
-        usePointStyle: true
-      }
-    }
-  },
-  responsive: true,
-  maintainAspectRatio: false
-})
-
-const barChartOptions = ref({
-  plugins: {
-    legend: {
-      display: false
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true
-    }
-  },
-  responsive: true,
-  maintainAspectRatio: false
-})
-
-// Methods
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(value || 0)
-}
-
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('pt-BR')
-}
-
-const getRankSeverity = (index: number) => {
-  if (index === 0) return 'warning' // Gold
-  if (index === 1) return 'secondary' // Silver
-  if (index === 2) return 'info' // Bronze
-  return 'primary'
-}
-
-const exportData = () => {
-  try {
-    fundraiserStore.exportToCSV()
-    toast.add({
-      severity: 'success',
-      summary: 'Sucesso',
-      detail: 'Relatório exportado com sucesso!',
-      life: 3000
-    })
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Erro ao exportar relatório',
-      life: 3000
-    })
-  }
-}
-
-onMounted(() => {
-  // Component is ready
-})
-</script>
-
 <style scoped>
 .dashboard {
   padding: 1rem;
@@ -364,6 +410,36 @@ onMounted(() => {
   margin: 0.5rem 0 0 0;
   color: #6c757d;
   font-size: 1.2rem;
+}
+
+.campaign-selector {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.campaign-selector label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.campaign-dropdown {
+  width: 100%;
+  max-width: 400px;
+}
+
+.campaign-value,
+.campaign-option {
+  display: flex;
+  align-items: center;
+}
+
+.mr-2 {
+  margin-right: 0.5rem;
 }
 
 .metrics-grid {

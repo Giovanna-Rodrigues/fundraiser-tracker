@@ -1,3 +1,169 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useFundraiserStore } from '@/stores/fundraiser'
+import { useToast } from 'primevue/usetoast'
+import type { Order } from '@/stores/fundraiser'
+
+// Store and utilities
+const fundraiserStore = useFundraiserStore()
+const toast = useToast()
+
+// Component state
+const showOrderDetails = ref(false)
+const selectedOrder = ref<Order | null>(null)
+
+// Filters
+const filters = ref({
+  dateFrom: null as Date | null,
+  dateTo: null as Date | null,
+  PathfinderId: null as string | null,
+  Status: null as string | null
+})
+
+// Computed properties
+const pathfinderFilterOptions = computed(() => [
+  { label: 'Todos os desbravadores', value: null },
+  ...fundraiserStore.pathfinders.map(pathfinder => ({
+    label: pathfinder.Name,
+    value: pathfinder.PK
+  }))
+])
+
+const statusFilterOptions = ref([
+  { label: 'Todos os status', value: null },
+  { label: 'Pendente', value: 'pending' },
+  { label: 'Preparando', value: 'preparing' },
+  { label: 'Pronto', value: 'ready' },
+  { label: 'Entregue', value: 'delivered' }
+])
+
+const filteredOrders = computed(() => {
+  let orders = fundraiserStore.ordersWithDetails
+
+  // Filter by date range
+  if (filters.value.dateFrom) {
+    const fromDate = new Date(filters.value.dateFrom).toISOString().split('T')[0]
+    orders = orders.filter((order: any) => order.Date >= fromDate)
+  }
+
+  if (filters.value.dateTo) {
+    const toDate = new Date(filters.value.dateTo).toISOString().split('T')[0]
+    orders = orders.filter((order: any) => order.Date <= toDate)
+  }
+
+  // Filter by pathfinder
+  if (filters.value.PathfinderId) {
+    orders = orders.filter((order: any) => order.PathfinderId === filters.value.PathfinderId)
+  }
+
+  // Filter by status
+  if (filters.value.Status) {
+    orders = orders.filter((order: any) => order.Status === filters.value.Status)
+  }
+
+  return orders
+})
+
+const totalFilteredSales = computed(() => {
+  return filteredOrders.value.reduce((sum: number, order: any) => sum + order.TotalAmount, 0)
+})
+
+const totalFilteredItems = computed(() => {
+  return filteredOrders.value.reduce((sum: number, order: any) => {
+    return sum + order.items.reduce((itemSum: number, item: any) => itemSum + item.Quantity, 0)
+  }, 0)
+})
+
+// Methods
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value || 0)
+}
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
+const getPaymentMethodLabel = (method: string) => {
+  const labels: Record<string, string> = {
+    card: 'Cartão',
+    cash: 'Dinheiro',
+    'pix-church': 'Pix Igreja',
+    'pix-qr': 'Pix QR'
+  }
+  return labels[method] || method
+}
+
+const getPaymentMethodSeverity = (method: string) => {
+  const severities: Record<string, string> = {
+    card: 'info',
+    cash: 'success',
+    'pix-church': 'warning',
+    'pix-qr': 'warning'
+  }
+  return severities[method] || 'secondary'
+}
+
+const getStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    pending: 'Pendente',
+    preparing: 'Preparando',
+    ready: 'Pronto',
+    delivered: 'Entregue'
+  }
+  return labels[status] || status
+}
+
+const getStatusSeverity = (status: string) => {
+  const severities: Record<string, string> = {
+    pending: 'warning',
+    preparing: 'info',
+    ready: 'success',
+    delivered: 'secondary'
+  }
+  return severities[status] || 'secondary'
+}
+
+const applyFilters = () => {
+  // Filters are applied automatically via computed property
+}
+
+const clearFilters = () => {
+  filters.value = {
+    dateFrom: null,
+    dateTo: null,
+    PathfinderId: null,
+    Status: null
+  }
+}
+
+const viewOrderDetails = (order: Order) => {
+  selectedOrder.value = order
+  showOrderDetails.value = true
+}
+
+const exportData = () => {
+  try {
+    fundraiserStore.exportToCSV()
+    toast.add({
+      severity: 'success',
+      summary: 'Sucesso',
+      detail: 'Relatório exportado com sucesso!',
+      life: 3000
+    })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro',
+      detail: 'Erro ao exportar relatório',
+      life: 3000
+    })
+  }
+}
+</script>
+
 <template>
   <div class="sales-list">
     <div class="container">
@@ -288,176 +454,6 @@
     <Toast />
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useFundraiserStore } from '@/stores/fundraiser'
-import { useToast } from 'primevue/usetoast'
-import type { Order } from '@/stores/fundraiser'
-
-// Store and utilities
-const fundraiserStore = useFundraiserStore()
-const toast = useToast()
-
-// Component state
-const showOrderDetails = ref(false)
-const selectedOrder = ref<Order | null>(null)
-
-// Filters
-const filters = ref({
-  dateFrom: null as Date | null,
-  dateTo: null as Date | null,
-  PathfinderId: null as string | null,
-  Status: null as string | null
-})
-
-// Computed properties
-const pathfinderFilterOptions = computed(() => [
-  { label: 'Todos os desbravadores', value: null },
-  ...fundraiserStore.pathfinders.map(pathfinder => ({
-    label: pathfinder.Name,
-    value: pathfinder.PK
-  }))
-])
-
-const statusFilterOptions = ref([
-  { label: 'Todos os status', value: null },
-  { label: 'Pendente', value: 'pending' },
-  { label: 'Preparando', value: 'preparing' },
-  { label: 'Pronto', value: 'ready' },
-  { label: 'Entregue', value: 'delivered' }
-])
-
-const filteredOrders = computed(() => {
-  let orders = fundraiserStore.ordersWithDetails
-
-  // Filter by date range
-  if (filters.value.dateFrom) {
-    const fromDate = new Date(filters.value.dateFrom).toISOString().split('T')[0]
-    orders = orders.filter((order: any) => order.Date >= fromDate)
-  }
-
-  if (filters.value.dateTo) {
-    const toDate = new Date(filters.value.dateTo).toISOString().split('T')[0]
-    orders = orders.filter((order: any) => order.Date <= toDate)
-  }
-
-  // Filter by pathfinder
-  if (filters.value.PathfinderId) {
-    orders = orders.filter((order: any) => order.PathfinderId === filters.value.PathfinderId)
-  }
-
-  // Filter by status
-  if (filters.value.Status) {
-    orders = orders.filter((order: any) => order.Status === filters.value.Status)
-  }
-
-  return orders
-})
-
-const totalFilteredSales = computed(() => {
-  return filteredOrders.value.reduce((sum: number, order: any) => sum + order.TotalAmount, 0)
-})
-
-const totalFilteredItems = computed(() => {
-  return filteredOrders.value.reduce((sum: number, order: any) => {
-    return sum + order.items.reduce((itemSum: number, item: any) => itemSum + item.Quantity, 0)
-  }, 0)
-})
-
-// Methods
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(value || 0)
-}
-
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('pt-BR')
-}
-
-const getPaymentMethodLabel = (method: string) => {
-  const labels: Record<string, string> = {
-    card: 'Cartão',
-    cash: 'Dinheiro',
-    'pix-church': 'Pix Igreja',
-    'pix-qr': 'Pix QR'
-  }
-  return labels[method] || method
-}
-
-const getPaymentMethodSeverity = (method: string) => {
-  const severities: Record<string, string> = {
-    card: 'info',
-    cash: 'success',
-    'pix-church': 'warning',
-    'pix-qr': 'warning'
-  }
-  return severities[method] || 'secondary'
-}
-
-const getStatusLabel = (status: string) => {
-  const labels: Record<string, string> = {
-    pending: 'Pendente',
-    preparing: 'Preparando',
-    ready: 'Pronto',
-    delivered: 'Entregue'
-  }
-  return labels[status] || status
-}
-
-const getStatusSeverity = (status: string) => {
-  const severities: Record<string, string> = {
-    pending: 'warning',
-    preparing: 'info',
-    ready: 'success',
-    delivered: 'secondary'
-  }
-  return severities[status] || 'secondary'
-}
-
-const applyFilters = () => {
-  // Filters are applied automatically via computed property
-}
-
-const clearFilters = () => {
-  filters.value = {
-    dateFrom: null,
-    dateTo: null,
-    PathfinderId: null,
-    Status: null
-  }
-}
-
-const viewOrderDetails = (order: Order) => {
-  selectedOrder.value = order
-  showOrderDetails.value = true
-}
-
-const exportData = () => {
-  try {
-    fundraiserStore.exportToCSV()
-    toast.add({
-      severity: 'success',
-      summary: 'Sucesso',
-      detail: 'Relatório exportado com sucesso!',
-      life: 3000
-    })
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Erro ao exportar relatório',
-      life: 3000
-    })
-  }
-}
-
-onMounted(() => {
-  // Component is ready
-})
-</script>
 
 <style scoped>
 .sales-list {
