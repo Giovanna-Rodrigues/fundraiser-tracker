@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redefinir Senha - Campanhas Genesis</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8f9fa;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 40px 0;">
+        <tr>
+            <td align="center">
+                <!-- Main Container -->
+                <table width="600" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);">
+                    <!-- Header -->
+                    <tr>
+                        <td align="center" style="padding: 40px 30px 30px 30px;">
+                            <!-- Logo Circle -->
+                            <div style="display: inline-block; width: 80px; height: 80px; background: linear-gradient(135deg, #ef7f47, #f7a169); border-radius: 50%; margin-bottom: 20px; box-shadow: 0 8px 20px rgba(239, 127, 71, 0.3);">
+                                <table width="80" height="80" cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td align="center" valign="middle" style="font-size: 40px; color: white;">
+                                            👥
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <h1 style="color: white; font-size: 28px; font-weight: 700; margin: 0 0 10px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                Campanhas Genesis
+                            </h1>
+                            <p style="color: rgba(255,255,255,0.9); font-size: 16px; margin: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                Sistema de Controle de Vendas
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Content Card -->
+                    <tr>
+                        <td style="padding: 0 30px 40px 30px;">
+                            <div style="background: rgba(255,255,255,0.95); border-radius: 12px; padding: 40px 30px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+                                <h2 style="color: #2c3e50; font-size: 24px; font-weight: 600; margin: 0 0 20px 0; text-align: center;">
+                                    🔐 Redefinir Senha
+                                </h2>
+
+                                <p style="color: #6c757d; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0; text-align: center;">
+                                    Olá! Você solicitou a redefinição de senha para sua conta no sistema da Campanhas Genesis.
+                                </p>
+
+                                <p style="color: #6c757d; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0; text-align: center;">
+                                    Clique no botão abaixo para criar uma nova senha:
+                                </p>
+
+                                <!-- Reset Button -->
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td align="center" style="padding: 20px 0;">
+                                            <a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery"
+                                               style="display: inline-block; background: linear-gradient(135deg, #ef7f47, #f7a169); color: white; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 15px rgba(239, 127, 71, 0.3); transition: all 0.3s ease;">
+                                                🚀 Redefinir Minha Senha
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <!-- Alternative Link -->
+                                <div style="margin: 30px 0 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #ef7f47;">
+                                    <p style="color: #6c757d; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">
+                                        Problemas com o botão? Copie e cole este link no seu navegador:
+                                    </p>
+                                    <p style="color: #ef7f47; font-size: 14px; margin: 0; word-break: break-all; font-family: monospace;">
+                                        {{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery
+                                    </p>
+                                </div>
+
+                                <!-- Security Notice -->
+                                <div style="margin: 20px 0 0 0; padding: 15px; background: rgba(239, 127, 71, 0.1); border-radius: 8px; border: 1px solid rgba(239, 127, 71, 0.2);">
+                                    <p style="color: #d97706; font-size: 14px; margin: 0; text-align: center;">
+                                        ⚠️ Por segurança, este link expira em 1 hora
+                                    </p>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 0 30px 40px 30px;">
+                            <div style="text-align: center;">
+                                <p style="color: rgba(255,255,255,0.8); font-size: 14px; margin: 0 0 10px 0;">
+                                    Se você não solicitou esta redefinição, ignore este email.
+                                </p>
+                                <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin: 0;">
+                                    © 2024 Campanhas Genesis - Sistema de Controle de Vendas
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Responsive Notice -->
+                <table width="600" cellpadding="0" cellspacing="0" style="margin-top: 20px;">
+                    <tr>
+                        <td align="center">
+                            <p style="color: #6c757d; font-size: 12px; margin: 0;">
+                                Este email foi enviado para {{ .Email }}
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

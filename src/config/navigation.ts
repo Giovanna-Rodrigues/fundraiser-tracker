@@ -26,7 +26,8 @@ export const menuSections: MenuSection[] = [
     items: [
       { path: '/pathfinders', label: 'Desbravadores', icon: 'pi pi-users' },
       { path: '/products', label: 'Produtos', icon: 'pi pi-box' },
-      { path: '/campaigns', label: 'Campanhas', icon: 'pi pi-flag' }
+      { path: '/campaigns', label: 'Campanhas', icon: 'pi pi-flag' },
+      { path: '/users', label: 'Usuários', icon: 'pi pi-user-plus' }
     ]
   },
   {
