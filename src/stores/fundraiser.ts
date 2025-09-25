@@ -45,6 +45,7 @@ export interface OrderItem {
   ProductId: string // PRODUCT#<uuid>
   Quantity: number
   Flavor?: string
+  ComboFlavors?: string[]
   UnitPrice: number
   TotalPrice: number
   CreatedAt: string
