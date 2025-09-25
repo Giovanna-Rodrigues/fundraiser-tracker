@@ -153,7 +153,7 @@ const exportData = () => {
         <img src="/logo.jpeg" alt="Logo do Clube" class="club-logo" />
         <div class="club-info">
           <h1>Campanha de Arrecadação</h1>
-          <p>Mini Pizzas e Pastéis - Clube de Desbravadores</p>
+          <p>Clube Genesis</p>
         </div>
       </div>
 
