@@ -23,8 +23,8 @@ const { currentUser, logout } = useAuth()
       <div class="brand" v-if="!collapsed">
         <img src="/logo.jpeg" alt="Logo do Clube" class="brand-logo" />
         <div class="brand-info">
-          <span class="brand-title">Campanha</span>
-          <span class="brand-subtitle">Desbravadores</span>
+          <span class="brand-title">Campanhas</span>
+          <span class="brand-subtitle">Clube Genesis</span>
         </div>
       </div>
       <button class="sidebar-toggle" @click="$emit('toggle')">
