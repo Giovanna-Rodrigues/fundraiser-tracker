@@ -30,13 +30,26 @@ export const useAuth = () => {
       }
     }
 
-    // Redirect to login if not authenticated (except for public pages)
-    const publicPages = ['/login', '/reset-password']
-    const hasInvitationToken = route.query.token_hash && (route.query.type === 'invite' || route.query.type === 'recovery')
+    // Use setTimeout to ensure router has processed the URL
+    setTimeout(() => {
+      // Redirect to login if not authenticated (except for public pages)
+      const publicPages = ['/login', '/reset-password']
+      const currentPath = router.currentRoute.value.path
+      const currentQuery = router.currentRoute.value.query
+      const hasInvitationToken = currentQuery.token_hash && (currentQuery.type === 'invite' || currentQuery.type === 'recovery')
 
-    if (!currentUser.value && !publicPages.includes(route.path) && !hasInvitationToken) {
-      router.push('/login')
-    }
+      console.log('Auth check:', {
+        path: currentPath,
+        query: currentQuery,
+        hasToken: hasInvitationToken,
+        isAuthenticated: !!currentUser.value
+      })
+
+      if (!currentUser.value && !publicPages.includes(currentPath) && !hasInvitationToken) {
+        console.log('Redirecting to login')
+        router.push('/login')
+      }
+    }, 100)
   }
 
   const setupAuthListener = () => {
