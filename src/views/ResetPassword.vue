@@ -33,14 +33,14 @@ onMounted(async () => {
       life: 3000
     })
   } else {
-    console.log('No valid token found, redirecting to login')
+    console.log('No valid token found')
     toast.add({
-      severity: 'error',
-      summary: 'Link inválido',
-      detail: 'Link de redefinição inválido ou expirado',
+      severity: 'info',
+      summary: 'Acesso direto',
+      detail: 'Esta página só pode ser acessada através de um link de email válido',
       life: 5000
     })
-    setTimeout(() => router.push('/login'), 2000)
+    setTimeout(() => router.push('/login'), 3000)
   }
 })
 
