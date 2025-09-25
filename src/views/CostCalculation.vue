@@ -1,3 +1,128 @@
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+interface Ingredient {
+  name: string
+  purchased: number
+  purchasedUnit: string
+  price: number
+  usedPerProduct: number
+  usedUnit: string
+}
+
+const ingredients = ref<Ingredient[]>([
+  {
+    name: 'Queijo',
+    purchased: 1,
+    purchasedUnit: 'kg',
+    price: 25.00,
+    usedPerProduct: 100,
+    usedUnit: 'g'
+  },
+  {
+    name: 'Molho de Tomate',
+    purchased: 500,
+    purchasedUnit: 'g',
+    price: 4.50,
+    usedPerProduct: 50,
+    usedUnit: 'g'
+  }
+])
+
+const customPrice = ref(0)
+const productName = ref('')
+
+const createProductWithPrice = (price: number) => {
+  if (!productName.value.trim()) {
+    alert('Por favor, insira um nome para o produto')
+    return
+  }
+
+  router.push({
+    path: '/products',
+    query: {
+      name: productName.value,
+      price: price.toFixed(2),
+      fromCalculator: 'true'
+    }
+  })
+}
+
+const addIngredient = () => {
+  ingredients.value.push({
+    name: '',
+    purchased: 0,
+    purchasedUnit: 'g',
+    price: 0,
+    usedPerProduct: 0,
+    usedUnit: 'g'
+  })
+}
+
+const removeIngredient = (index: number) => {
+  ingredients.value.splice(index, 1)
+}
+
+const convertToGrams = (amount: number, unit: string): number => {
+  switch (unit) {
+    case 'kg': return amount * 1000
+    case 'l': return amount * 1000
+    case 'ml': return amount
+    case 'g': return amount
+    case 'unidades': return amount
+    default: return amount
+  }
+}
+
+const getCostPerProduct = (ingredient: Ingredient): number => {
+  if (!ingredient.purchased || !ingredient.price || !ingredient.usedPerProduct) return 0
+
+  const purchasedInBaseUnit = convertToGrams(ingredient.purchased, ingredient.purchasedUnit)
+  const usedInBaseUnit = convertToGrams(ingredient.usedPerProduct, ingredient.usedUnit)
+
+  if (purchasedInBaseUnit === 0) return 0
+
+  const costPerUnit = ingredient.price / purchasedInBaseUnit
+  return costPerUnit * usedInBaseUnit
+}
+
+const totalCostPerProduct = computed(() => {
+  return ingredients.value.reduce((total, ingredient) => {
+    return total + getCostPerProduct(ingredient)
+  }, 0)
+})
+
+const maxProductsPossible = computed(() => {
+  if (ingredients.value.length === 0) return 0
+
+  return Math.floor(Math.min(...ingredients.value.map(ingredient => {
+    if (!ingredient.purchased || !ingredient.usedPerProduct) return 0
+
+    const purchasedInBaseUnit = convertToGrams(ingredient.purchased, ingredient.purchasedUnit)
+    const usedInBaseUnit = convertToGrams(ingredient.usedPerProduct, ingredient.usedUnit)
+
+    if (usedInBaseUnit === 0) return 0
+
+    return purchasedInBaseUnit / usedInBaseUnit
+  })))
+})
+
+const totalInvestment = computed(() => {
+  return ingredients.value.reduce((total, ingredient) => {
+    return total + (ingredient.price || 0)
+  }, 0)
+})
+
+const getMarginPercentage = (sellPrice: number): number => {
+  if (totalCostPerProduct.value === 0) return 0
+  return ((sellPrice - totalCostPerProduct.value) / totalCostPerProduct.value) * 100
+}
+</script>
+
 <template>
   <div class="cost-calculation">
     <div class="page-header">
@@ -189,130 +314,6 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-interface Ingredient {
-  name: string
-  purchased: number
-  purchasedUnit: string
-  price: number
-  usedPerProduct: number
-  usedUnit: string
-}
-
-const ingredients = ref<Ingredient[]>([
-  {
-    name: 'Queijo',
-    purchased: 1,
-    purchasedUnit: 'kg',
-    price: 25.00,
-    usedPerProduct: 100,
-    usedUnit: 'g'
-  },
-  {
-    name: 'Molho de Tomate',
-    purchased: 500,
-    purchasedUnit: 'g',
-    price: 4.50,
-    usedPerProduct: 50,
-    usedUnit: 'g'
-  }
-])
-
-const customPrice = ref(0)
-const productName = ref('')
-
-const createProductWithPrice = (price: number) => {
-  if (!productName.value.trim()) {
-    alert('Por favor, insira um nome para o produto')
-    return
-  }
-
-  router.push({
-    path: '/products',
-    query: {
-      name: productName.value,
-      price: price.toFixed(2),
-      fromCalculator: 'true'
-    }
-  })
-}
-
-const addIngredient = () => {
-  ingredients.value.push({
-    name: '',
-    purchased: 0,
-    purchasedUnit: 'g',
-    price: 0,
-    usedPerProduct: 0,
-    usedUnit: 'g'
-  })
-}
-
-const removeIngredient = (index: number) => {
-  ingredients.value.splice(index, 1)
-}
-
-const convertToGrams = (amount: number, unit: string): number => {
-  switch (unit) {
-    case 'kg': return amount * 1000
-    case 'l': return amount * 1000
-    case 'ml': return amount
-    case 'g': return amount
-    case 'unidades': return amount
-    default: return amount
-  }
-}
-
-const getCostPerProduct = (ingredient: Ingredient): number => {
-  if (!ingredient.purchased || !ingredient.price || !ingredient.usedPerProduct) return 0
-
-  const purchasedInBaseUnit = convertToGrams(ingredient.purchased, ingredient.purchasedUnit)
-  const usedInBaseUnit = convertToGrams(ingredient.usedPerProduct, ingredient.usedUnit)
-
-  if (purchasedInBaseUnit === 0) return 0
-
-  const costPerUnit = ingredient.price / purchasedInBaseUnit
-  return costPerUnit * usedInBaseUnit
-}
-
-const totalCostPerProduct = computed(() => {
-  return ingredients.value.reduce((total, ingredient) => {
-    return total + getCostPerProduct(ingredient)
-  }, 0)
-})
-
-const maxProductsPossible = computed(() => {
-  if (ingredients.value.length === 0) return 0
-
-  return Math.floor(Math.min(...ingredients.value.map(ingredient => {
-    if (!ingredient.purchased || !ingredient.usedPerProduct) return 0
-
-    const purchasedInBaseUnit = convertToGrams(ingredient.purchased, ingredient.purchasedUnit)
-    const usedInBaseUnit = convertToGrams(ingredient.usedPerProduct, ingredient.usedUnit)
-
-    if (usedInBaseUnit === 0) return 0
-
-    return purchasedInBaseUnit / usedInBaseUnit
-  })))
-})
-
-const totalInvestment = computed(() => {
-  return ingredients.value.reduce((total, ingredient) => {
-    return total + (ingredient.price || 0)
-  }, 0)
-})
-
-const getMarginPercentage = (sellPrice: number): number => {
-  if (totalCostPerProduct.value === 0) return 0
-  return ((sellPrice - totalCostPerProduct.value) / totalCostPerProduct.value) * 100
-}
-</script>
 
 <style scoped>
 .cost-calculation {

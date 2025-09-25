@@ -1,3 +1,174 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useFundraiserStore } from '@/stores/fundraiser'
+import { useToast } from 'primevue/usetoast'
+import type { PathfinderSalesData } from '@/stores/fundraiser'
+
+// Store and utilities
+const fundraiserStore = useFundraiserStore()
+const toast = useToast()
+
+// Component state
+const showDetailsDialog = ref(false)
+const selectedPathfinder = ref<PathfinderSalesData | null>(null)
+
+// Computed properties
+const salesByPathfinder = computed(() => fundraiserStore.salesByPathfinder)
+const totalSales = computed(() => fundraiserStore.totalSales)
+
+const totalProductsSold = computed(() => fundraiserStore.totalProductsSold)
+
+const averageSalePerPathfinder = computed(() => {
+  if (salesByPathfinder.value.length === 0) return 0
+  return totalSales.value / salesByPathfinder.value.length
+})
+
+const pathfinderSales = computed(() => {
+  if (!selectedPathfinder.value) return []
+
+  return fundraiserStore.orders
+    .filter(order =>
+      order.PathfinderId === selectedPathfinder.value!.pathfinder.PK &&
+      order.CampaignId === fundraiserStore.selectedCampaignId
+    )
+    .map(order => {
+      // Load items from OrderItemsTable
+      const orderItemsForOrder = fundraiserStore.orderItems.filter(item => item.OrderId === order.PK)
+
+      const itemsText = orderItemsForOrder.map(item => {
+        const product = fundraiserStore.products.find(p => p.PK === item.ProductId)
+        const flavor = item.Flavor ? ` (${item.Flavor})` : ''
+        return `${product?.Name || 'N/A'}${flavor} x${item.Quantity}`
+      }).join(', ') || 'N/A'
+
+      const totalQuantity = orderItemsForOrder.reduce((sum, item) => sum + item.Quantity, 0)
+
+      return {
+        PK: order.PK,
+        Date: order.Date,
+        productName: itemsText,
+        Quantity: totalQuantity,
+        PaymentMethod: order.PaymentMethod,
+        TotalAmount: order.TotalAmount,
+        CreatedAt: order.CreatedAt
+      }
+    })
+    .sort((a, b) => new Date(b.CreatedAt).getTime() - new Date(a.CreatedAt).getTime())
+})
+
+// Methods
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value || 0)
+}
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
+const getCampaignName = (campaignId: string) => {
+  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
+  return campaign?.Name || ''
+}
+
+const getCampaignStatus = (campaignId: string) => {
+  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
+  return campaign?.Status || ''
+}
+
+const getRankSeverity = (index: number) => {
+  if (index === 0) return 'warning' // Gold
+  if (index === 1) return 'secondary' // Silver
+  if (index === 2) return 'info' // Bronze
+  return 'primary'
+}
+
+const getRankIcon = (index: number) => {
+  if (index === 0) return 'pi pi-crown'
+  if (index === 1) return 'pi pi-trophy'
+  if (index === 2) return 'pi pi-trophy'
+  return ''
+}
+
+const getRankColor = (index: number) => {
+  if (index === 0) return { color: '#FFD700' } // Gold
+  if (index === 1) return { color: '#C0C0C0' } // Silver
+  if (index === 2) return { color: '#CD7F32' } // Bronze
+  return {}
+}
+
+const getAvatarColor = (name: string) => {
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8']
+  const index = name.charCodeAt(0) % colors.length
+  return colors[index]
+}
+
+const getPaymentMethodLabel = (method: string) => {
+  const labels: Record<string, string> = {
+    'card': 'Cartão',
+    'cash': 'Dinheiro',
+    'pix-church': 'Pix Igreja',
+    'pix-qr': 'Pix QR'
+  }
+  return labels[method] || method
+}
+
+const getPaymentMethodSeverity = (method: string) => {
+  const severities: Record<string, string> = {
+    'card': 'info',
+    'cash': 'success',
+    'pix-church': 'warning',
+    'pix-qr': 'secondary'
+  }
+  return severities[method] || 'primary'
+}
+
+const showPathfinderDetails = (pathfinderData: PathfinderSalesData) => {
+  selectedPathfinder.value = pathfinderData
+  showDetailsDialog.value = true
+}
+
+const exportRanking = () => {
+  try {
+    const headers = ['Posição', 'Nome', 'Total de Vendas', 'Produtos Vendidos', 'Número de Pedidos', 'Ticket Médio']
+    const rows = salesByPathfinder.value.map((data, index) => [
+      index + 1,
+      data.pathfinder.Name,
+      `R$ ${data.totalAmount.toFixed(2).replace('.', ',')}`,
+      data.totalQuantity,
+      data.orderCount,
+      `R$ ${(data.totalAmount / data.orderCount).toFixed(2).replace('.', ',')}`
+    ])
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `ranking_desbravadores_${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+
+    toast.add({
+      severity: 'success',
+      summary: 'Sucesso',
+      detail: 'Ranking exportado com sucesso!',
+      life: 3000
+    })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro',
+      detail: 'Erro ao exportar ranking',
+      life: 3000
+    })
+  }
+}
+</script>
+
 <template>
   <div class="leaderboard">
     <div class="header-section">
@@ -268,177 +439,6 @@
     <Toast />
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useFundraiserStore } from '@/stores/fundraiser'
-import { useToast } from 'primevue/usetoast'
-import type { PathfinderSalesData } from '@/stores/fundraiser'
-
-// Store and utilities
-const fundraiserStore = useFundraiserStore()
-const toast = useToast()
-
-// Component state
-const showDetailsDialog = ref(false)
-const selectedPathfinder = ref<PathfinderSalesData | null>(null)
-
-// Computed properties
-const salesByPathfinder = computed(() => fundraiserStore.salesByPathfinder)
-const totalSales = computed(() => fundraiserStore.totalSales)
-
-const totalProductsSold = computed(() => fundraiserStore.totalProductsSold)
-
-const averageSalePerPathfinder = computed(() => {
-  if (salesByPathfinder.value.length === 0) return 0
-  return totalSales.value / salesByPathfinder.value.length
-})
-
-const pathfinderSales = computed(() => {
-  if (!selectedPathfinder.value) return []
-
-  return fundraiserStore.orders
-    .filter(order =>
-      order.PathfinderId === selectedPathfinder.value!.pathfinder.PK &&
-      order.CampaignId === fundraiserStore.selectedCampaignId
-    )
-    .map(order => {
-      // Load items from OrderItemsTable
-      const orderItemsForOrder = fundraiserStore.orderItems.filter(item => item.OrderId === order.PK)
-
-      const itemsText = orderItemsForOrder.map(item => {
-        const product = fundraiserStore.products.find(p => p.PK === item.ProductId)
-        const flavor = item.Flavor ? ` (${item.Flavor})` : ''
-        return `${product?.Name || 'N/A'}${flavor} x${item.Quantity}`
-      }).join(', ') || 'N/A'
-
-      const totalQuantity = orderItemsForOrder.reduce((sum, item) => sum + item.Quantity, 0)
-
-      return {
-        PK: order.PK,
-        Date: order.Date,
-        productName: itemsText,
-        Quantity: totalQuantity,
-        PaymentMethod: order.PaymentMethod,
-        TotalAmount: order.TotalAmount,
-        CreatedAt: order.CreatedAt
-      }
-    })
-    .sort((a, b) => new Date(b.CreatedAt).getTime() - new Date(a.CreatedAt).getTime())
-})
-
-// Methods
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(value || 0)
-}
-
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('pt-BR')
-}
-
-const getCampaignName = (campaignId: string) => {
-  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
-  return campaign?.Name || ''
-}
-
-const getCampaignStatus = (campaignId: string) => {
-  const campaign = fundraiserStore.campaigns.find(c => c.PK === campaignId)
-  return campaign?.Status || ''
-}
-
-const getRankSeverity = (index: number) => {
-  if (index === 0) return 'warning' // Gold
-  if (index === 1) return 'secondary' // Silver
-  if (index === 2) return 'info' // Bronze
-  return 'primary'
-}
-
-const getRankIcon = (index: number) => {
-  if (index === 0) return 'pi pi-crown'
-  if (index === 1) return 'pi pi-trophy'
-  if (index === 2) return 'pi pi-trophy'
-  return ''
-}
-
-const getRankColor = (index: number) => {
-  if (index === 0) return { color: '#FFD700' } // Gold
-  if (index === 1) return { color: '#C0C0C0' } // Silver
-  if (index === 2) return { color: '#CD7F32' } // Bronze
-  return {}
-}
-
-const getAvatarColor = (name: string) => {
-  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8']
-  const index = name.charCodeAt(0) % colors.length
-  return colors[index]
-}
-
-const getPaymentMethodLabel = (method: string) => {
-  const labels: Record<string, string> = {
-    'card': 'Cartão',
-    'cash': 'Dinheiro',
-    'pix-church': 'Pix Igreja',
-    'pix-qr': 'Pix QR'
-  }
-  return labels[method] || method
-}
-
-const getPaymentMethodSeverity = (method: string) => {
-  const severities: Record<string, string> = {
-    'card': 'info',
-    'cash': 'success',
-    'pix-church': 'warning',
-    'pix-qr': 'secondary'
-  }
-  return severities[method] || 'primary'
-}
-
-const showPathfinderDetails = (pathfinderData: PathfinderSalesData) => {
-  selectedPathfinder.value = pathfinderData
-  showDetailsDialog.value = true
-}
-
-const exportRanking = () => {
-  try {
-    const headers = ['Posição', 'Nome', 'Total de Vendas', 'Produtos Vendidos', 'Número de Pedidos', 'Ticket Médio']
-    const rows = salesByPathfinder.value.map((data, index) => [
-      index + 1,
-      data.pathfinder.Name,
-      `R$ ${data.totalAmount.toFixed(2).replace('.', ',')}`,
-      data.totalQuantity,
-      data.orderCount,
-      `R$ ${(data.totalAmount / data.orderCount).toFixed(2).replace('.', ',')}`
-    ])
-
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(field => `"${field}"`).join(','))
-      .join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `ranking_desbravadores_${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
-
-    toast.add({
-      severity: 'success',
-      summary: 'Sucesso',
-      detail: 'Ranking exportado com sucesso!',
-      life: 3000
-    })
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Erro ao exportar ranking',
-      life: 3000
-    })
-  }
-}
-</script>
 
 <style scoped>
 .leaderboard {

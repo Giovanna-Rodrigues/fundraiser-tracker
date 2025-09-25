@@ -1,3 +1,194 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useFundraiserStore } from '@/stores/fundraiser'
+import type { Product } from '@/stores/fundraiser'
+import Dialog from 'primevue/dialog'
+import Button from 'primevue/button'
+
+const route = useRoute()
+const fundraiserStore = useFundraiserStore()
+
+const products = computed(() => fundraiserStore.products)
+const showProductDialog = ref(false)
+const showPriceHistoryDialog = ref(false)
+const showDeleteDialog = ref(false)
+const editingProduct = ref<Product | null>(null)
+const selectedProductHistory = ref<Product | null>(null)
+const productToDelete = ref<Product | null>(null)
+const priceHistory = ref<any[]>([])
+const flavorsInput = ref('')
+
+interface ProductForm {
+  Name: string
+  Price: number
+  Category: 'pizza' | 'pastry' | 'ice-cream' | 'beverage' | 'combo' | 'other'
+  Flavors: string[]
+  Description?: string
+  ComboItems?: Array<{
+    ProductId: string
+    Quantity: number
+    AllowFlavorSelection?: boolean
+  }>
+  PriceNote?: string
+}
+
+const productForm = ref<ProductForm>({
+  Name: '',
+  Price: 0,
+  Category: 'pizza',
+  Flavors: [],
+  Description: '',
+  ComboItems: [],
+  PriceNote: ''
+})
+
+const nonComboProducts = computed(() => {
+  return fundraiserStore.products.filter(p => p.Category !== 'combo')
+})
+
+const openProductDialog = (product?: Product) => {
+  if (product) {
+    editingProduct.value = product
+    productForm.value = {
+      Name: product.Name,
+      Price: product.Price,
+      Category: product.Category,
+      Flavors: product.Flavors || [],
+      Description: product.Description || '',
+      ComboItems: product.ComboItems ? [...product.ComboItems] : [],
+      PriceNote: ''
+    }
+    flavorsInput.value = product.Flavors?.join(', ') || ''
+  } else {
+    editingProduct.value = null
+    productForm.value = {
+      Name: '',
+      Price: 0,
+      Category: 'pizza',
+      Flavors: [],
+      Description: '',
+      ComboItems: [],
+      PriceNote: ''
+    }
+    flavorsInput.value = ''
+  }
+  showProductDialog.value = true
+}
+
+const addComboItem = () => {
+  if (!productForm.value.ComboItems) {
+    productForm.value.ComboItems = []
+  }
+  productForm.value.ComboItems.push({
+    ProductId: '',
+    Quantity: 1,
+    AllowFlavorSelection: false
+  })
+}
+
+const removeComboItem = (index: number) => {
+  productForm.value.ComboItems?.splice(index, 1)
+}
+
+const getProductName = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.Name || 'N/A'
+}
+
+const saveProduct = async () => {
+  const flavors = productForm.value.Category !== 'combo'
+    ? flavorsInput.value
+        .split(',')
+        .map(f => f.trim())
+        .filter(f => f.length > 0)
+    : []
+
+  const productData: any = {
+    Name: productForm.value.Name,
+    Price: productForm.value.Price,
+    Category: productForm.value.Category,
+    Flavors: flavors,
+    Description: productForm.value.Description || null
+  }
+
+  // Add combo items if it's a combo product
+  if (productForm.value.Category === 'combo' && productForm.value.ComboItems) {
+    productData.ComboItems = productForm.value.ComboItems.filter(item => item.ProductId)
+  }
+
+  if (editingProduct.value) {
+    await fundraiserStore.updateProduct(editingProduct.value.PK, productData, productForm.value.PriceNote)
+  } else {
+    await fundraiserStore.addProduct(productData)
+  }
+
+  showProductDialog.value = false
+}
+
+const viewPriceHistory = async (product: Product) => {
+  selectedProductHistory.value = product
+  priceHistory.value = await fundraiserStore.getPriceHistory(product.PK)
+  showPriceHistoryDialog.value = true
+}
+
+const confirmDeleteProduct = (product: Product) => {
+  productToDelete.value = product
+  showDeleteDialog.value = true
+}
+
+const deleteProduct = async () => {
+  if (productToDelete.value) {
+    await fundraiserStore.deleteProduct(productToDelete.value.PK)
+    showDeleteDialog.value = false
+    productToDelete.value = null
+  }
+}
+
+const getCategoryLabel = (category: string) => {
+  const labels: Record<string, string> = {
+    pizza: 'Pizza',
+    pastry: 'Pastel',
+    'ice-cream': 'Sorvete',
+    beverage: 'Bebida',
+    combo: 'Combo',
+    other: 'Outro'
+  }
+  return labels[category] || category
+}
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('pt-BR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+onMounted(() => {
+  fundraiserStore.loadFromSupabase()
+
+  if (route.query.fromCalculator === 'true') {
+    const name = route.query.name as string
+    const price = parseFloat(route.query.price as string)
+
+    if (name && price) {
+      productForm.value = {
+        Name: name,
+        Price: price,
+        Category: 'other',
+        Flavors: [],
+        PriceNote: 'Preço calculado baseado em custos'
+      }
+      showProductDialog.value = true
+    }
+  }
+})
+</script>
+
 <template>
   <div class="products-management">
     <div class="page-header">
@@ -247,197 +438,6 @@
     </Dialog>
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { useFundraiserStore } from '@/stores/fundraiser'
-import type { Product } from '@/stores/fundraiser'
-import Dialog from 'primevue/dialog'
-import Button from 'primevue/button'
-
-const route = useRoute()
-const fundraiserStore = useFundraiserStore()
-
-const products = computed(() => fundraiserStore.products)
-const showProductDialog = ref(false)
-const showPriceHistoryDialog = ref(false)
-const showDeleteDialog = ref(false)
-const editingProduct = ref<Product | null>(null)
-const selectedProductHistory = ref<Product | null>(null)
-const productToDelete = ref<Product | null>(null)
-const priceHistory = ref<any[]>([])
-const flavorsInput = ref('')
-
-interface ProductForm {
-  Name: string
-  Price: number
-  Category: 'pizza' | 'pastry' | 'ice-cream' | 'beverage' | 'combo' | 'other'
-  Flavors: string[]
-  Description?: string
-  ComboItems?: Array<{
-    ProductId: string
-    Quantity: number
-    AllowFlavorSelection?: boolean
-  }>
-  PriceNote?: string
-}
-
-const productForm = ref<ProductForm>({
-  Name: '',
-  Price: 0,
-  Category: 'pizza',
-  Flavors: [],
-  Description: '',
-  ComboItems: [],
-  PriceNote: ''
-})
-
-const nonComboProducts = computed(() => {
-  return fundraiserStore.products.filter(p => p.Category !== 'combo')
-})
-
-const openProductDialog = (product?: Product) => {
-  if (product) {
-    editingProduct.value = product
-    productForm.value = {
-      Name: product.Name,
-      Price: product.Price,
-      Category: product.Category,
-      Flavors: product.Flavors || [],
-      Description: product.Description || '',
-      ComboItems: product.ComboItems ? [...product.ComboItems] : [],
-      PriceNote: ''
-    }
-    flavorsInput.value = product.Flavors?.join(', ') || ''
-  } else {
-    editingProduct.value = null
-    productForm.value = {
-      Name: '',
-      Price: 0,
-      Category: 'pizza',
-      Flavors: [],
-      Description: '',
-      ComboItems: [],
-      PriceNote: ''
-    }
-    flavorsInput.value = ''
-  }
-  showProductDialog.value = true
-}
-
-const addComboItem = () => {
-  if (!productForm.value.ComboItems) {
-    productForm.value.ComboItems = []
-  }
-  productForm.value.ComboItems.push({
-    ProductId: '',
-    Quantity: 1,
-    AllowFlavorSelection: false
-  })
-}
-
-const removeComboItem = (index: number) => {
-  productForm.value.ComboItems?.splice(index, 1)
-}
-
-const getProductName = (productId: string) => {
-  const product = fundraiserStore.products.find(p => p.PK === productId)
-  return product?.Name || 'N/A'
-}
-
-const saveProduct = async () => {
-  const flavors = productForm.value.Category !== 'combo'
-    ? flavorsInput.value
-        .split(',')
-        .map(f => f.trim())
-        .filter(f => f.length > 0)
-    : []
-
-  const productData: any = {
-    Name: productForm.value.Name,
-    Price: productForm.value.Price,
-    Category: productForm.value.Category,
-    Flavors: flavors,
-    Description: productForm.value.Description || null
-  }
-
-  // Add combo items if it's a combo product
-  if (productForm.value.Category === 'combo' && productForm.value.ComboItems) {
-    productData.ComboItems = productForm.value.ComboItems.filter(item => item.ProductId)
-  }
-
-  if (editingProduct.value) {
-    await fundraiserStore.updateProduct(editingProduct.value.PK, productData, productForm.value.PriceNote)
-  } else {
-    await fundraiserStore.addProduct(productData)
-  }
-
-  showProductDialog.value = false
-}
-
-const viewPriceHistory = async (product: Product) => {
-  selectedProductHistory.value = product
-  priceHistory.value = await fundraiserStore.getPriceHistory(product.PK)
-  showPriceHistoryDialog.value = true
-}
-
-const confirmDeleteProduct = (product: Product) => {
-  productToDelete.value = product
-  showDeleteDialog.value = true
-}
-
-const deleteProduct = async () => {
-  if (productToDelete.value) {
-    await fundraiserStore.deleteProduct(productToDelete.value.PK)
-    showDeleteDialog.value = false
-    productToDelete.value = null
-  }
-}
-
-const getCategoryLabel = (category: string) => {
-  const labels: Record<string, string> = {
-    pizza: 'Pizza',
-    pastry: 'Pastel',
-    'ice-cream': 'Sorvete',
-    beverage: 'Bebida',
-    combo: 'Combo',
-    other: 'Outro'
-  }
-  return labels[category] || category
-}
-
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('pt-BR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-onMounted(() => {
-  fundraiserStore.loadFromSupabase()
-
-  if (route.query.fromCalculator === 'true') {
-    const name = route.query.name as string
-    const price = parseFloat(route.query.price as string)
-
-    if (name && price) {
-      productForm.value = {
-        Name: name,
-        Price: price,
-        Category: 'other',
-        Flavors: [],
-        PriceNote: 'Preço calculado baseado em custos'
-      }
-      showProductDialog.value = true
-    }
-  }
-})
-</script>
 
 <style scoped>
 .products-management {

@@ -1,259 +1,3 @@
-<template>
-  <div class="kitchen">
-    <div class="container">
-      <div class="header-section">
-        <div class="header-info">
-          <h2>👨‍🍳 Cozinha - Pedidos</h2>
-          <div class="status-summary">
-            <Badge :value="ordersByStatus.pending" severity="warning" />
-            <span class="status-text">Pendentes</span>
-            <Badge :value="ordersByStatus.preparing" severity="info" />
-            <span class="status-text">Preparando</span>
-            <Badge :value="ordersByStatus.ready" severity="success" />
-            <span class="status-text">Prontos</span>
-          </div>
-        </div>
-        <div class="header-actions">
-          <Button
-            label="Atualizar"
-            icon="pi pi-refresh"
-            class="p-button-outlined"
-            @click="refreshOrders"
-          />
-          <Button
-            label="Novo Pedido"
-            icon="pi pi-plus"
-            @click="$router.push('/orders')"
-          />
-        </div>
-      </div>
-
-      <!-- Filter Tabs -->
-      <div class="filter-tabs">
-        <Button
-          :label="`Todos (${allOrders.length})`"
-          :class="{ 'p-button-outlined': activeFilter !== 'all' }"
-          @click="activeFilter = 'all'"
-        />
-        <Button
-          :label="`Pendentes (${ordersByStatus.pending})`"
-          :class="{ 'p-button-outlined': activeFilter !== 'pending' }"
-          severity="warning"
-          @click="activeFilter = 'pending'"
-        />
-        <Button
-          :label="`Preparando (${ordersByStatus.preparing})`"
-          :class="{ 'p-button-outlined': activeFilter !== 'preparing' }"
-          severity="info"
-          @click="activeFilter = 'preparing'"
-        />
-        <Button
-          :label="`Prontos (${ordersByStatus.ready})`"
-          :class="{ 'p-button-outlined': activeFilter !== 'ready' }"
-          severity="success"
-          @click="activeFilter = 'ready'"
-        />
-      </div>
-
-      <!-- Orders Grid -->
-      <div class="orders-grid">
-        <div v-if="filteredOrders.length === 0" class="empty-state">
-          <i class="pi pi-clock"></i>
-          <h3>Nenhum pedido {{ getFilterText() }}</h3>
-          <p>Os pedidos aparecerão aqui conforme forem sendo feitos.</p>
-        </div>
-
-        <div v-for="order in filteredOrders" :key="order.PK" class="order-card" :class="getOrderCardClass(getOrderStatus(order.PK))">
-          <!-- Order Header -->
-          <div class="order-header">
-            <div class="order-info">
-              <h4>Pedido #{{ getOrderNumber(order) }}</h4>
-              <div class="order-meta">
-                <span class="customer-name">{{ order.CustomerName }}</span>
-                <span class="pathfinder-name">por {{ order.pathfinderName }}</span>
-              </div>
-            </div>
-            <div class="order-actions">
-              <Dropdown
-                :model-value="getOrderStatus(order.PK)"
-                :options="statusOptions"
-                optionLabel="label"
-                optionValue="value"
-                @update:model-value="updateOrderStatus(order.PK, $event)"
-                :class="getStatusClass(getOrderStatus(order.PK))"
-              />
-            </div>
-          </div>
-
-          <!-- Order Items -->
-          <div class="order-items">
-            <div v-for="item in order.itemsWithDetails" :key="`${item.ProductId}-${item.Flavor}`"
-                 class="order-item"
-                 :class="{ 'item-completed': isItemCompleted(order.PK, item) }">
-              <div class="item-badge"
-                   :class="{ 'badge-clickable': true, 'badge-completed': isItemCompleted(order.PK, item) }"
-                   @click="toggleItemCompletion(order.PK, item)"
-                   :title="isItemCompleted(order.PK, item) ? 'Clique para marcar como pendente' : 'Clique para marcar como pronto'">
-                <Badge :value="item.Quantity" />
-                <i v-if="isItemCompleted(order.PK, item)" class="pi pi-check completion-check"></i>
-              </div>
-              <div class="item-details">
-                <div class="item-name" :class="{ 'completed-text': isItemCompleted(order.PK, item) }">{{ item.productName }}</div>
-                <div v-if="item.Flavor" class="item-flavor" :class="{ 'completed-text': isItemCompleted(order.PK, item) }">{{ item.Flavor }}</div>
-              </div>
-            </div>
-
-            <!-- Progress indicator -->
-            <div class="order-progress">
-              <div class="progress-text">
-                {{ getItemCompletionCount(order.PK).completed }} / {{ getItemCompletionCount(order.PK).total }} itens prontos
-              </div>
-              <div class="progress-bar">
-                <div class="progress-fill"
-                     :style="{ width: (getItemCompletionCount(order.PK).completed / getItemCompletionCount(order.PK).total * 100) + '%' }"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Order Footer -->
-          <div class="order-footer">
-            <div class="order-time">
-              <i class="pi pi-clock"></i>
-              <span>{{ formatTime(order.CreatedAt) }}</span>
-            </div>
-            <div class="order-total">
-              <span class="total-label">Total:</span>
-              <span class="total-amount">{{ formatCurrency(order.TotalAmount) }}</span>
-            </div>
-          </div>
-
-          <!-- Order Notes -->
-          <div v-if="order.Notes" class="order-notes">
-            <i class="pi pi-info-circle"></i>
-            <span>{{ order.Notes }}</span>
-          </div>
-
-          <!-- Quick Actions -->
-          <div class="quick-actions">
-            <Button
-              v-if="order.Status === 'pending'"
-              label="Iniciar Preparo"
-              icon="pi pi-play"
-              class="p-button-warning p-button-sm"
-              @click="updateOrderStatus(order.PK, 'preparing')"
-            />
-            <Button
-              v-if="order.Status === 'preparing'"
-              label="Marcar Pronto"
-              icon="pi pi-check"
-              class="p-button-success p-button-sm"
-              @click="updateOrderStatus(order.PK, 'ready')"
-            />
-            <Button
-              v-if="order.Status === 'ready'"
-              label="Marcar Entregue"
-              icon="pi pi-check-circle"
-              class="p-button-success p-button-sm"
-              @click="updateOrderStatus(order.PK, 'delivered')"
-            />
-            <Button
-              label="Ver Detalhes"
-              icon="pi pi-eye"
-              class="p-button-outlined p-button-sm"
-              @click="showOrderDetails(order)"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Order Details Dialog -->
-    <Dialog
-      v-model:visible="showDetailsDialog"
-      :header="`Detalhes do Pedido #${selectedOrder ? getOrderNumber(selectedOrder) : ''}`"
-      :modal="true"
-      style="width: 600px"
-    >
-      <div v-if="selectedOrder" class="order-details">
-        <!-- Customer Information -->
-        <div class="details-section">
-          <h6>Informações do Cliente</h6>
-          <div class="details-grid">
-            <div class="detail-item">
-              <span class="label">Cliente:</span>
-              <span class="value">{{ selectedOrder.CustomerName }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">Desbravador:</span>
-              <span class="value">{{ selectedOrder.pathfinderName }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">Data do Pedido:</span>
-              <span class="value">{{ formatDate(selectedOrder.Date) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">Horário:</span>
-              <span class="value">{{ formatTime(selectedOrder.CreatedAt) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Items Details -->
-        <div class="details-section">
-          <h6>Itens do Pedido</h6>
-          <div class="items-list">
-            <div v-for="item in selectedOrder.itemsWithDetails" :key="`${item.ProductId}-${item.Flavor}`" class="item-detail">
-              <div class="item-qty">{{ item.Quantity }}x</div>
-              <div class="item-info">
-                <div class="item-name">{{ item.productName }}</div>
-                <div v-if="item.Flavor" class="item-flavor">{{ item.Flavor }}</div>
-              </div>
-              <div class="item-price">{{ formatCurrency(item.TotalPrice) }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Payment Information -->
-        <div class="details-section">
-          <h6>Informações de Pagamento</h6>
-          <div class="payment-details">
-            <div class="payment-row">
-              <span>Subtotal:</span>
-              <span>{{ formatCurrency(selectedOrder.Subtotal) }}</span>
-            </div>
-            <div v-if="selectedOrder.Discount > 0" class="payment-row">
-              <span>Desconto:</span>
-              <span class="discount">-{{ formatCurrency(selectedOrder.Discount) }}</span>
-            </div>
-            <div class="payment-row total">
-              <span>Total:</span>
-              <span>{{ formatCurrency(selectedOrder.TotalAmount) }}</span>
-            </div>
-            <div class="payment-row">
-              <span>Forma de Pagamento:</span>
-              <span>{{ getPaymentMethodLabel(selectedOrder.PaymentMethod) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Notes -->
-        <div v-if="selectedOrder.Notes" class="details-section">
-          <h6>Observações</h6>
-          <div class="notes-content">
-            {{ selectedOrder.Notes }}
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <Button label="Fechar" icon="pi pi-times" @click="showDetailsDialog = false" />
-      </template>
-    </Dialog>
-
-    <Toast />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useFundraiserStore } from '@/stores/fundraiser'
@@ -517,24 +261,6 @@ const getStatusClass = (status: string) => {
   }
 }
 
-const getProductIcon = (productId: string) => {
-  const icons: Record<string, string> = {
-    'PRODUCT#1': 'pi pi-circle-fill', // Pizza
-    'PRODUCT#2': 'pi pi-stop-circle', // Pastel
-    'PRODUCT#3': 'pi pi-heart-fill'   // Ice cream
-  }
-  return icons[productId] || 'pi pi-circle'
-}
-
-const getProductIconColor = (productId: string) => {
-  const colors: Record<string, string> = {
-    'PRODUCT#1': '#ff6b35', // Pizza - orange
-    'PRODUCT#2': '#f7931e', // Pastel - yellow
-    'PRODUCT#3': '#4ecdc4'  // Ice cream - cyan
-  }
-  return { color: colors[productId] || '#6c757d' }
-}
-
 const getPaymentMethodLabel = (method: string) => {
   const labels: Record<string, string> = {
     'card': 'Cartão',
@@ -589,10 +315,265 @@ const refreshOrders = async () => {
 }
 
 onMounted(() => {
-  // Auto-refresh every 30 seconds in a real implementation
-  // setInterval(refreshOrders, 30000)
+  setInterval(refreshOrders, 300000) // Refresh every 5 minutes
 })
 </script>
+
+<template>
+  <div class="kitchen">
+    <div class="container">
+      <div class="header-section">
+        <div class="header-info">
+          <h2>👨‍🍳 Cozinha - Pedidos</h2>
+          <div class="status-summary">
+            <Badge :value="ordersByStatus.pending" severity="warning" />
+            <span class="status-text">Pendentes</span>
+            <Badge :value="ordersByStatus.preparing" severity="info" />
+            <span class="status-text">Preparando</span>
+            <Badge :value="ordersByStatus.ready" severity="success" />
+            <span class="status-text">Prontos</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <Button
+            label="Atualizar"
+            icon="pi pi-refresh"
+            class="p-button-outlined"
+            @click="refreshOrders"
+          />
+          <Button
+            label="Novo Pedido"
+            icon="pi pi-plus"
+            @click="$router.push('/orders')"
+          />
+        </div>
+      </div>
+
+      <!-- Filter Tabs -->
+      <div class="filter-tabs">
+        <Button
+          :label="`Todos (${allOrders.length})`"
+          :class="{ 'p-button-outlined': activeFilter !== 'all' }"
+          @click="activeFilter = 'all'"
+        />
+        <Button
+          :label="`Pendentes (${ordersByStatus.pending})`"
+          :class="{ 'p-button-outlined': activeFilter !== 'pending' }"
+          severity="warning"
+          @click="activeFilter = 'pending'"
+        />
+        <Button
+          :label="`Preparando (${ordersByStatus.preparing})`"
+          :class="{ 'p-button-outlined': activeFilter !== 'preparing' }"
+          severity="info"
+          @click="activeFilter = 'preparing'"
+        />
+        <Button
+          :label="`Prontos (${ordersByStatus.ready})`"
+          :class="{ 'p-button-outlined': activeFilter !== 'ready' }"
+          severity="success"
+          @click="activeFilter = 'ready'"
+        />
+      </div>
+
+      <!-- Orders Grid -->
+      <div class="orders-grid">
+        <div v-if="filteredOrders.length === 0" class="empty-state">
+          <i class="pi pi-clock"></i>
+          <h3>Nenhum pedido {{ getFilterText() }}</h3>
+          <p>Os pedidos aparecerão aqui conforme forem sendo feitos.</p>
+        </div>
+
+        <div v-for="order in filteredOrders" :key="order.PK" class="order-card" :class="getOrderCardClass(getOrderStatus(order.PK))">
+          <!-- Order Header -->
+          <div class="order-header">
+            <div class="order-info">
+              <h4>Pedido #{{ getOrderNumber(order) }}</h4>
+              <div class="order-meta">
+                <span class="customer-name">{{ order.CustomerName }}</span>
+                <span class="pathfinder-name">por {{ order.pathfinderName }}</span>
+              </div>
+            </div>
+            <div class="order-actions">
+              <Dropdown
+                :model-value="getOrderStatus(order.PK)"
+                :options="statusOptions"
+                optionLabel="label"
+                optionValue="value"
+                @update:model-value="updateOrderStatus(order.PK, $event)"
+                :class="getStatusClass(getOrderStatus(order.PK))"
+              />
+            </div>
+          </div>
+
+          <!-- Order Items -->
+          <div class="order-items">
+            <div v-for="item in order.itemsWithDetails" :key="`${item.ProductId}-${item.Flavor}`"
+                 class="order-item"
+                 :class="{ 'item-completed': isItemCompleted(order.PK, item) }">
+              <div class="item-badge"
+                   :class="{ 'badge-clickable': true, 'badge-completed': isItemCompleted(order.PK, item) }"
+                   @click="toggleItemCompletion(order.PK, item)"
+                   :title="isItemCompleted(order.PK, item) ? 'Clique para marcar como pendente' : 'Clique para marcar como pronto'">
+                <Badge :value="item.Quantity" />
+                <i v-if="isItemCompleted(order.PK, item)" class="pi pi-check completion-check"></i>
+              </div>
+              <div class="item-details">
+                <div class="item-name" :class="{ 'completed-text': isItemCompleted(order.PK, item) }">{{ item.productName }}</div>
+                <div v-if="item.Flavor" class="item-flavor" :class="{ 'completed-text': isItemCompleted(order.PK, item) }">{{ item.Flavor }}</div>
+              </div>
+            </div>
+
+            <!-- Progress indicator -->
+            <div class="order-progress">
+              <div class="progress-text">
+                {{ getItemCompletionCount(order.PK).completed }} / {{ getItemCompletionCount(order.PK).total }} itens prontos
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill"
+                     :style="{ width: (getItemCompletionCount(order.PK).completed / getItemCompletionCount(order.PK).total * 100) + '%' }"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Order Footer -->
+          <div class="order-footer">
+            <div class="order-time">
+              <i class="pi pi-clock"></i>
+              <span>{{ formatTime(order.CreatedAt) }}</span>
+            </div>
+            <div class="order-total">
+              <span class="total-label">Total:</span>
+              <span class="total-amount">{{ formatCurrency(order.TotalAmount) }}</span>
+            </div>
+          </div>
+
+          <!-- Order Notes -->
+          <div v-if="order.Notes" class="order-notes">
+            <i class="pi pi-info-circle"></i>
+            <span>{{ order.Notes }}</span>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="quick-actions">
+            <Button
+              v-if="order.Status === 'pending'"
+              label="Iniciar Preparo"
+              icon="pi pi-play"
+              class="p-button-warning p-button-sm"
+              @click="updateOrderStatus(order.PK, 'preparing')"
+            />
+            <Button
+              v-if="order.Status === 'preparing'"
+              label="Marcar Pronto"
+              icon="pi pi-check"
+              class="p-button-success p-button-sm"
+              @click="updateOrderStatus(order.PK, 'ready')"
+            />
+            <Button
+              v-if="order.Status === 'ready'"
+              label="Marcar Entregue"
+              icon="pi pi-check-circle"
+              class="p-button-success p-button-sm"
+              @click="updateOrderStatus(order.PK, 'delivered')"
+            />
+            <Button
+              label="Ver Detalhes"
+              icon="pi pi-eye"
+              class="p-button-outlined p-button-sm"
+              @click="showOrderDetails(order)"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Order Details Dialog -->
+    <Dialog
+      v-model:visible="showDetailsDialog"
+      :header="`Detalhes do Pedido #${selectedOrder ? getOrderNumber(selectedOrder) : ''}`"
+      :modal="true"
+      style="width: 600px"
+    >
+      <div v-if="selectedOrder" class="order-details">
+        <!-- Customer Information -->
+        <div class="details-section">
+          <h6>Informações do Cliente</h6>
+          <div class="details-grid">
+            <div class="detail-item">
+              <span class="label">Cliente:</span>
+              <span class="value">{{ selectedOrder.CustomerName }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Desbravador:</span>
+              <span class="value">{{ selectedOrder.pathfinderName }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Data do Pedido:</span>
+              <span class="value">{{ formatDate(selectedOrder.Date) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Horário:</span>
+              <span class="value">{{ formatTime(selectedOrder.CreatedAt) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Items Details -->
+        <div class="details-section">
+          <h6>Itens do Pedido</h6>
+          <div class="items-list">
+            <div v-for="item in selectedOrder.itemsWithDetails" :key="`${item.ProductId}-${item.Flavor}`" class="item-detail">
+              <div class="item-qty">{{ item.Quantity }}x</div>
+              <div class="item-info">
+                <div class="item-name">{{ item.productName }}</div>
+                <div v-if="item.Flavor" class="item-flavor">{{ item.Flavor }}</div>
+              </div>
+              <div class="item-price">{{ formatCurrency(item.TotalPrice) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment Information -->
+        <div class="details-section">
+          <h6>Informações de Pagamento</h6>
+          <div class="payment-details">
+            <div class="payment-row">
+              <span>Subtotal:</span>
+              <span>{{ formatCurrency(selectedOrder.Subtotal) }}</span>
+            </div>
+            <div v-if="selectedOrder.Discount > 0" class="payment-row">
+              <span>Desconto:</span>
+              <span class="discount">-{{ formatCurrency(selectedOrder.Discount) }}</span>
+            </div>
+            <div class="payment-row total">
+              <span>Total:</span>
+              <span>{{ formatCurrency(selectedOrder.TotalAmount) }}</span>
+            </div>
+            <div class="payment-row">
+              <span>Forma de Pagamento:</span>
+              <span>{{ getPaymentMethodLabel(selectedOrder.PaymentMethod) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div v-if="selectedOrder.Notes" class="details-section">
+          <h6>Observações</h6>
+          <div class="notes-content">
+            {{ selectedOrder.Notes }}
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Fechar" icon="pi pi-times" @click="showDetailsDialog = false" />
+      </template>
+    </Dialog>
+
+    <Toast />
+  </div>
+</template>
 
 <style scoped>
 .kitchen {

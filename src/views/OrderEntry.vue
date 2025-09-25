@@ -1,3 +1,247 @@
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import { useFundraiserStore } from '@/stores/fundraiser'
+import { useToast } from 'primevue/usetoast'
+import type { OrderItem, Order } from '@/stores/fundraiser'
+
+// Store and utilities
+const fundraiserStore = useFundraiserStore()
+const toast = useToast()
+
+// Component state
+const submitted = ref(false)
+const quickSubmitted = ref(false)
+const showQuickAddPathfinder = ref(false)
+
+// Form data
+const orderForm = ref({
+  PathfinderId: null as string | null,
+  CustomerName: '',
+  items: [] as OrderItem[],
+  Subtotal: 0,
+  Discount: 0,
+  TotalAmount: 0,
+  PaymentMethod: null as Order['PaymentMethod'] | null,
+  Date: new Date(),
+  Notes: ''
+})
+
+const quickPathfinderForm = ref({
+  Name: ''
+})
+
+// Options for dropdowns
+const pathfinderOptions = computed(() => {
+  return fundraiserStore.pathfinders.map(pathfinder => ({
+    label: pathfinder.Name,
+    value: pathfinder.PK
+  }))
+})
+
+const productOptions = computed(() => {
+  return fundraiserStore.products.map(product => ({
+    label: `${product.Name} - ${formatCurrency(product.Price)}`,
+    value: product.PK
+  }))
+})
+
+const paymentOptions = ref([
+  { label: 'Cartão', value: 'card' as const },
+  { label: 'Dinheiro', value: 'cash' as const },
+  { label: 'Pix Igreja', value: 'pix-church' as const },
+  { label: 'Pix QR Code', value: 'pix-qr' as const }
+])
+
+// Methods
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value || 0)
+}
+
+const getProductName = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.Name || 'N/A'
+}
+
+const getProductFlavors = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.Flavors || []
+}
+
+const isComboProduct = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.Category === 'combo' && product?.ComboItems && product.ComboItems.length > 0
+}
+
+const getComboItems = (productId: string) => {
+  const product = fundraiserStore.products.find(p => p.PK === productId)
+  return product?.ComboItems || []
+}
+
+const addItem = () => {
+  orderForm.value.items.push({
+    ProductId: '',
+    Quantity: 1,
+    Flavor: '',
+    UnitPrice: 0,
+    TotalPrice: 0,
+    ComboFlavors: []
+  } as any) // Temporary type assertion - will be proper OrderItems on save
+}
+
+const removeItem = (index: number) => {
+  orderForm.value.items.splice(index, 1)
+  updateSubtotal()
+}
+
+const updateItemProduct = (index: number) => {
+  const item = orderForm.value.items[index]
+  const product = fundraiserStore.products.find(p => p.PK === item.ProductId)
+
+  if (product) {
+    item.UnitPrice = product.Price
+    item.Flavor = ''
+
+    // Initialize ComboFlavors array if it's a combo product
+    if (product.Category === 'combo' && product.ComboItems) {
+      item.ComboFlavors = new Array(product.ComboItems.length).fill('')
+    } else {
+      item.ComboFlavors = []
+    }
+
+    updateItemTotal(index)
+  }
+}
+
+const updateItemTotal = (index: number) => {
+  const item = orderForm.value.items[index]
+  item.TotalPrice = item.UnitPrice * item.Quantity
+  updateSubtotal()
+}
+
+const updateSubtotal = () => {
+  orderForm.value.Subtotal = orderForm.value.items.reduce((sum, item) => sum + item.TotalPrice, 0)
+  updateTotal()
+}
+
+const updateTotal = () => {
+  orderForm.value.TotalAmount = Math.max(0, orderForm.value.Subtotal - orderForm.value.Discount)
+}
+
+const clearForm = () => {
+  orderForm.value = {
+    PathfinderId: null,
+    CustomerName: '',
+    items: [],
+    Subtotal: 0,
+    Discount: 0,
+    TotalAmount: 0,
+    PaymentMethod: null,
+    Date: new Date(),
+    Notes: ''
+  }
+  submitted.value = false
+}
+
+const validateForm = () => {
+  return orderForm.value.PathfinderId &&
+         orderForm.value.CustomerName?.trim() &&
+         orderForm.value.items.length > 0 &&
+         orderForm.value.items.every(item => item.ProductId && item.Quantity > 0) &&
+         orderForm.value.PaymentMethod
+}
+
+const saveOrder = async () => {
+  submitted.value = true
+
+  if (!validateForm()) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro',
+      detail: 'Preencha todos os campos obrigatórios',
+      life: 3000
+    })
+    return
+  }
+
+  try {
+    const orderData = {
+      PathfinderId: orderForm.value.PathfinderId!,
+      CustomerName: orderForm.value.CustomerName.trim(),
+      items: orderForm.value.items,
+      Subtotal: orderForm.value.Subtotal,
+      Discount: orderForm.value.Discount,
+      TotalAmount: orderForm.value.TotalAmount,
+      PaymentMethod: orderForm.value.PaymentMethod!,
+      Status: 'pending' as const,
+      Date: orderForm.value.Date.toISOString().split('T')[0],
+      Notes: orderForm.value.Notes?.trim()
+    }
+
+    await fundraiserStore.addOrder(orderData)
+
+    toast.add({
+      severity: 'success',
+      summary: 'Sucesso',
+      detail: 'Pedido registrado com sucesso!',
+      life: 3000
+    })
+
+    clearForm()
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro',
+      detail: 'Erro ao registrar pedido',
+      life: 3000
+    })
+  }
+}
+
+const saveAsDraft = () => {
+  // For now, just save as pending
+  saveOrder()
+}
+
+const saveQuickPathfinder = async () => {
+  quickSubmitted.value = true
+
+  if (!quickPathfinderForm.value.Name?.trim()) {
+    return
+  }
+
+  try {
+    const newPathfinder = await fundraiserStore.addPathfinder({
+      Name: quickPathfinderForm.value.Name.trim()
+    })
+    orderForm.value.PathfinderId = newPathfinder.PK
+
+    toast.add({
+      severity: 'success',
+      summary: 'Sucesso',
+      detail: 'Desbravador adicionado com sucesso!',
+      life: 3000
+    })
+
+    showQuickAddPathfinder.value = false
+    quickPathfinderForm.value.Name = ''
+    quickSubmitted.value = false
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro',
+      detail: 'Erro ao adicionar desbravador',
+      life: 3000
+    })
+  }
+}
+
+// Watchers
+watch(() => orderForm.value.Discount, updateTotal)
+</script>
+
 <template>
   <div class="order-entry">
     <div class="container">
@@ -347,250 +591,6 @@
     <Toast />
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useFundraiserStore } from '@/stores/fundraiser'
-import { useToast } from 'primevue/usetoast'
-import type { OrderItem, Order } from '@/stores/fundraiser'
-
-// Store and utilities
-const fundraiserStore = useFundraiserStore()
-const toast = useToast()
-
-// Component state
-const submitted = ref(false)
-const quickSubmitted = ref(false)
-const showQuickAddPathfinder = ref(false)
-
-// Form data
-const orderForm = ref({
-  PathfinderId: null as string | null,
-  CustomerName: '',
-  items: [] as OrderItem[],
-  Subtotal: 0,
-  Discount: 0,
-  TotalAmount: 0,
-  PaymentMethod: null as Order['PaymentMethod'] | null,
-  Date: new Date(),
-  Notes: ''
-})
-
-const quickPathfinderForm = ref({
-  Name: ''
-})
-
-// Options for dropdowns
-const pathfinderOptions = computed(() => {
-  return fundraiserStore.pathfinders.map(pathfinder => ({
-    label: pathfinder.Name,
-    value: pathfinder.PK
-  }))
-})
-
-const productOptions = computed(() => {
-  return fundraiserStore.products.map(product => ({
-    label: `${product.Name} - ${formatCurrency(product.Price)}`,
-    value: product.PK
-  }))
-})
-
-const paymentOptions = ref([
-  { label: 'Cartão', value: 'card' as const },
-  { label: 'Dinheiro', value: 'cash' as const },
-  { label: 'Pix Igreja', value: 'pix-church' as const },
-  { label: 'Pix QR Code', value: 'pix-qr' as const }
-])
-
-// Methods
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(value || 0)
-}
-
-const getProductName = (productId: string) => {
-  const product = fundraiserStore.products.find(p => p.PK === productId)
-  return product?.Name || 'N/A'
-}
-
-const getProductFlavors = (productId: string) => {
-  const product = fundraiserStore.products.find(p => p.PK === productId)
-  return product?.Flavors || []
-}
-
-const isComboProduct = (productId: string) => {
-  const product = fundraiserStore.products.find(p => p.PK === productId)
-  return product?.Category === 'combo' && product?.ComboItems && product.ComboItems.length > 0
-}
-
-const getComboItems = (productId: string) => {
-  const product = fundraiserStore.products.find(p => p.PK === productId)
-  return product?.ComboItems || []
-}
-
-const addItem = () => {
-  orderForm.value.items.push({
-    ProductId: '',
-    Quantity: 1,
-    Flavor: '',
-    UnitPrice: 0,
-    TotalPrice: 0,
-    ComboFlavors: []
-  } as any) // Temporary type assertion - will be proper OrderItems on save
-}
-
-const removeItem = (index: number) => {
-  orderForm.value.items.splice(index, 1)
-  updateSubtotal()
-}
-
-const updateItemProduct = (index: number) => {
-  const item = orderForm.value.items[index]
-  const product = fundraiserStore.products.find(p => p.PK === item.ProductId)
-
-  if (product) {
-    item.UnitPrice = product.Price
-    item.Flavor = ''
-
-    // Initialize ComboFlavors array if it's a combo product
-    if (product.Category === 'combo' && product.ComboItems) {
-      item.ComboFlavors = new Array(product.ComboItems.length).fill('')
-    } else {
-      item.ComboFlavors = []
-    }
-
-    updateItemTotal(index)
-  }
-}
-
-const updateItemTotal = (index: number) => {
-  const item = orderForm.value.items[index]
-  item.TotalPrice = item.UnitPrice * item.Quantity
-  updateSubtotal()
-}
-
-const updateSubtotal = () => {
-  orderForm.value.Subtotal = orderForm.value.items.reduce((sum, item) => sum + item.TotalPrice, 0)
-  updateTotal()
-}
-
-const updateTotal = () => {
-  orderForm.value.TotalAmount = Math.max(0, orderForm.value.Subtotal - orderForm.value.Discount)
-}
-
-const clearForm = () => {
-  orderForm.value = {
-    PathfinderId: null,
-    CustomerName: '',
-    items: [],
-    Subtotal: 0,
-    Discount: 0,
-    TotalAmount: 0,
-    PaymentMethod: null,
-    Date: new Date(),
-    Notes: ''
-  }
-  submitted.value = false
-}
-
-const validateForm = () => {
-  return orderForm.value.PathfinderId &&
-         orderForm.value.CustomerName?.trim() &&
-         orderForm.value.items.length > 0 &&
-         orderForm.value.items.every(item => item.ProductId && item.Quantity > 0) &&
-         orderForm.value.PaymentMethod
-}
-
-const saveOrder = async () => {
-  submitted.value = true
-
-  if (!validateForm()) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Preencha todos os campos obrigatórios',
-      life: 3000
-    })
-    return
-  }
-
-  try {
-    const orderData = {
-      PathfinderId: orderForm.value.PathfinderId!,
-      CustomerName: orderForm.value.CustomerName.trim(),
-      items: orderForm.value.items,
-      Subtotal: orderForm.value.Subtotal,
-      Discount: orderForm.value.Discount,
-      TotalAmount: orderForm.value.TotalAmount,
-      PaymentMethod: orderForm.value.PaymentMethod!,
-      Status: 'pending' as const,
-      Date: orderForm.value.Date.toISOString().split('T')[0],
-      Notes: orderForm.value.Notes?.trim()
-    }
-
-    await fundraiserStore.addOrder(orderData)
-
-    toast.add({
-      severity: 'success',
-      summary: 'Sucesso',
-      detail: 'Pedido registrado com sucesso!',
-      life: 3000
-    })
-
-    clearForm()
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Erro ao registrar pedido',
-      life: 3000
-    })
-  }
-}
-
-const saveAsDraft = () => {
-  // For now, just save as pending
-  saveOrder()
-}
-
-const saveQuickPathfinder = async () => {
-  quickSubmitted.value = true
-
-  if (!quickPathfinderForm.value.Name?.trim()) {
-    return
-  }
-
-  try {
-    const newPathfinder = await fundraiserStore.addPathfinder({
-      Name: quickPathfinderForm.value.Name.trim()
-    })
-    orderForm.value.PathfinderId = newPathfinder.PK
-
-    toast.add({
-      severity: 'success',
-      summary: 'Sucesso',
-      detail: 'Desbravador adicionado com sucesso!',
-      life: 3000
-    })
-
-    showQuickAddPathfinder.value = false
-    quickPathfinderForm.value.Name = ''
-    quickSubmitted.value = false
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Erro ao adicionar desbravador',
-      life: 3000
-    })
-  }
-}
-
-// Watchers
-watch(() => orderForm.value.Discount, updateTotal)
-</script>
 
 <style scoped>
 .order-entry {

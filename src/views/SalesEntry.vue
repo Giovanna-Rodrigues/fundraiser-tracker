@@ -1,3 +1,181 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+import { useFundraiserStore } from '@/stores/fundraiser'
+import { useToast } from 'primevue/usetoast'
+import type { Product } from '@/stores/fundraiser'
+
+// Store and utilities
+const fundraiserStore = useFundraiserStore()
+const toast = useToast()
+
+// Component state
+const submitted = ref(false)
+const quickSubmitted = ref(false)
+const showQuickAddPathfinder = ref(false)
+
+// Form data
+const saleForm = ref({
+  pathfinderId: null as string | null,
+  productId: null as string | null,
+  quantity: 1,
+  paymentMethod: null as 'card' | 'pix' | null,
+  totalAmount: 0,
+  date: new Date()
+})
+
+const quickPathfinderForm = ref({
+  name: ''
+})
+
+// Options for dropdowns
+const pathfinderOptions = computed(() => {
+  return fundraiserStore.pathfinders.map(pathfinder => ({
+    label: pathfinder.Name,
+    value: pathfinder.PK
+  }))
+})
+
+const productOptions = computed(() => {
+  return fundraiserStore.products.map(product => ({
+    label: `${product.Name} - ${formatCurrency(product.Price)}`,
+    value: product.PK
+  }))
+})
+
+const paymentOptions = ref([
+  { label: 'Cartão', value: 'card' as const },
+  { label: 'Pix', value: 'pix' as const }
+])
+
+// Computed properties
+const selectedProduct = computed((): Product | null => {
+  if (!saleForm.value.productId) return null
+  return fundraiserStore.products.find(p => p.PK === saleForm.value.productId) || null
+})
+
+// Methods
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value || 0)
+}
+
+const getProductSeverity = (category: string) => {
+  const severities: Record<string, string> = {
+    pizza: 'success',
+    pastry: 'info'
+  }
+  return severities[category] || 'secondary'
+}
+
+const updateTotalAmount = () => {
+  if (selectedProduct.value && saleForm.value.quantity > 0) {
+    saleForm.value.totalAmount = selectedProduct.value.Price * saleForm.value.quantity
+  } else {
+    saleForm.value.totalAmount = 0
+  }
+}
+
+const clearForm = () => {
+  saleForm.value = {
+    pathfinderId: null as string | null,
+    productId: null as string | null,
+    quantity: 1,
+    paymentMethod: null as 'card' | 'pix' | null,
+    totalAmount: 0,
+    date: new Date()
+  }
+  submitted.value = false
+}
+
+const saveSale = async () => {
+  submitted.value = true
+
+  // Validation
+  if (!saleForm.value.pathfinderId || !saleForm.value.productId ||
+      !saleForm.value.quantity || saleForm.value.quantity < 1 ||
+      !saleForm.value.paymentMethod || !saleForm.value.date) {
+    return
+  }
+
+  try {
+    const paymentMethod = saleForm.value.paymentMethod === 'pix' ? 'pix-qr' : saleForm.value.paymentMethod
+
+    await fundraiserStore.addOrder({
+      PathfinderId: saleForm.value.pathfinderId!,
+      CustomerName: 'Cliente', // Default customer name for legacy sales
+      Subtotal: saleForm.value.totalAmount,
+      Discount: 0,
+      TotalAmount: saleForm.value.totalAmount,
+      PaymentMethod: paymentMethod as 'card' | 'cash' | 'pix-church' | 'pix-qr',
+      Status: 'delivered' as const,
+      Date: saleForm.value.date.toISOString().split('T')[0],
+      items: [{
+        ProductId: saleForm.value.productId!,
+        Quantity: saleForm.value.quantity,
+        Flavor: '',
+        UnitPrice: selectedProduct.value!.Price,
+        TotalPrice: saleForm.value.totalAmount
+      }]
+    })
+
+    toast.add({
+      severity: 'success',
+      summary: 'Sucesso',
+      detail: 'Venda registrada com sucesso!',
+      life: 3000
+    })
+
+    clearForm()
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro',
+      detail: 'Erro ao registrar venda',
+      life: 3000
+    })
+  }
+}
+
+const saveQuickPathfinder = async () => {
+  quickSubmitted.value = true
+
+  if (!quickPathfinderForm.value.name?.trim()) {
+    return
+  }
+
+  try {
+    const newPathfinder = await fundraiserStore.addPathfinder({
+      Name: quickPathfinderForm.value.name.trim()
+    })
+    saleForm.value.pathfinderId = newPathfinder.PK
+
+    toast.add({
+      severity: 'success',
+      summary: 'Sucesso',
+      detail: 'Desbravador adicionado com sucesso!',
+      life: 3000
+    })
+
+    showQuickAddPathfinder.value = false
+    quickPathfinderForm.value.name = ''
+    quickSubmitted.value = false
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Erro',
+      detail: 'Erro ao adicionar desbravador',
+      life: 3000
+    })
+  }
+}
+
+// Watchers
+watch(() => saleForm.value.productId, updateTotalAmount)
+watch(() => saleForm.value.quantity, updateTotalAmount)
+</script>
+
 <template>
   <div class="sales-entry">
     <div class="header-section">
@@ -207,188 +385,6 @@
     <Toast />
   </div>
 </template>
-
-<script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useFundraiserStore } from '@/stores/fundraiser'
-import { useToast } from 'primevue/usetoast'
-import type { Product } from '@/stores/fundraiser'
-
-// Store and utilities
-const fundraiserStore = useFundraiserStore()
-const toast = useToast()
-
-// Component state
-const submitted = ref(false)
-const quickSubmitted = ref(false)
-const showQuickAddPathfinder = ref(false)
-
-// Form data
-const saleForm = ref({
-  pathfinderId: null as string | null,
-  productId: null as string | null,
-  quantity: 1,
-  paymentMethod: null as 'card' | 'pix' | null,
-  totalAmount: 0,
-  date: new Date()
-})
-
-const quickPathfinderForm = ref({
-  name: ''
-})
-
-// Options for dropdowns
-const pathfinderOptions = computed(() => {
-  return fundraiserStore.pathfinders.map(pathfinder => ({
-    label: pathfinder.Name,
-    value: pathfinder.PK
-  }))
-})
-
-const productOptions = computed(() => {
-  return fundraiserStore.products.map(product => ({
-    label: `${product.Name} - ${formatCurrency(product.Price)}`,
-    value: product.PK
-  }))
-})
-
-const paymentOptions = ref([
-  { label: 'Cartão', value: 'card' as const },
-  { label: 'Pix', value: 'pix' as const }
-])
-
-// Computed properties
-const selectedProduct = computed((): Product | null => {
-  if (!saleForm.value.productId) return null
-  return fundraiserStore.products.find(p => p.PK === saleForm.value.productId) || null
-})
-
-// Methods
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(value || 0)
-}
-
-const getProductSeverity = (category: string) => {
-  const severities: Record<string, string> = {
-    pizza: 'success',
-    pastry: 'info'
-  }
-  return severities[category] || 'secondary'
-}
-
-const updateTotalAmount = () => {
-  if (selectedProduct.value && saleForm.value.quantity > 0) {
-    saleForm.value.totalAmount = selectedProduct.value.Price * saleForm.value.quantity
-  } else {
-    saleForm.value.totalAmount = 0
-  }
-}
-
-const clearForm = () => {
-  saleForm.value = {
-    pathfinderId: null as string | null,
-    productId: null as string | null,
-    quantity: 1,
-    paymentMethod: null as 'card' | 'pix' | null,
-    totalAmount: 0,
-    date: new Date()
-  }
-  submitted.value = false
-}
-
-const saveSale = async () => {
-  submitted.value = true
-
-  // Validation
-  if (!saleForm.value.pathfinderId || !saleForm.value.productId ||
-      !saleForm.value.quantity || saleForm.value.quantity < 1 ||
-      !saleForm.value.paymentMethod || !saleForm.value.date) {
-    return
-  }
-
-  try {
-    const paymentMethod = saleForm.value.paymentMethod === 'pix' ? 'pix-qr' : saleForm.value.paymentMethod
-
-    await fundraiserStore.addOrder({
-      PathfinderId: saleForm.value.pathfinderId!,
-      CustomerName: 'Cliente', // Default customer name for legacy sales
-      Subtotal: saleForm.value.totalAmount,
-      Discount: 0,
-      TotalAmount: saleForm.value.totalAmount,
-      PaymentMethod: paymentMethod as 'card' | 'cash' | 'pix-church' | 'pix-qr',
-      Status: 'delivered' as const,
-      Date: saleForm.value.date.toISOString().split('T')[0],
-      items: [{
-        ProductId: saleForm.value.productId!,
-        Quantity: saleForm.value.quantity,
-        Flavor: '',
-        UnitPrice: selectedProduct.value!.Price,
-        TotalPrice: saleForm.value.totalAmount
-      }]
-    })
-
-    toast.add({
-      severity: 'success',
-      summary: 'Sucesso',
-      detail: 'Venda registrada com sucesso!',
-      life: 3000
-    })
-
-    clearForm()
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Erro ao registrar venda',
-      life: 3000
-    })
-  }
-}
-
-const saveQuickPathfinder = async () => {
-  quickSubmitted.value = true
-
-  if (!quickPathfinderForm.value.name?.trim()) {
-    return
-  }
-
-  try {
-    const newPathfinder = await fundraiserStore.addPathfinder({
-      Name: quickPathfinderForm.value.name.trim()
-    })
-    saleForm.value.pathfinderId = newPathfinder.PK
-
-    toast.add({
-      severity: 'success',
-      summary: 'Sucesso',
-      detail: 'Desbravador adicionado com sucesso!',
-      life: 3000
-    })
-
-    showQuickAddPathfinder.value = false
-    quickPathfinderForm.value.name = ''
-    quickSubmitted.value = false
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Erro ao adicionar desbravador',
-      life: 3000
-    })
-  }
-}
-
-// Watchers
-watch(() => saleForm.value.productId, updateTotalAmount)
-watch(() => saleForm.value.quantity, updateTotalAmount)
-
-onMounted(() => {
-  // Component is ready
-})
-</script>
 
 <style scoped>
 .sales-entry {
