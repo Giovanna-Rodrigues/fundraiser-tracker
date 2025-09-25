@@ -32,7 +32,9 @@ export const useAuth = () => {
 
     // Redirect to login if not authenticated (except for public pages)
     const publicPages = ['/login', '/reset-password']
-    if (!currentUser.value && !publicPages.includes(route.path)) {
+    const hasInvitationToken = route.query.token_hash && (route.query.type === 'invite' || route.query.type === 'recovery')
+
+    if (!currentUser.value && !publicPages.includes(route.path) && !hasInvitationToken) {
       router.push('/login')
     }
   }
