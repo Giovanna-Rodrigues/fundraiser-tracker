@@ -20,18 +20,76 @@ onMounted(async () => {
   // Check if we have token_hash in URL parameters
   const tokenHash = route.query.token_hash as string
   const type = route.query.type as string
+  const accessToken = route.query.access_token as string
+  const refreshToken = route.query.refresh_token as string
 
-  console.log('Reset password page loaded with:', { tokenHash, type })
+  console.log('Reset password page loaded with:', { tokenHash, type, accessToken, refreshToken })
 
   if (tokenHash && (type === 'recovery' || type === 'invite')) {
-    // If we have valid URL parameters, assume it's valid and show the form
-    isValidSession.value = true
-    toast.add({
-      severity: 'success',
-      summary: 'Link válido',
-      detail: type === 'invite' ? 'Bem-vindo! Defina sua senha abaixo.' : 'Defina sua nova senha abaixo.',
-      life: 3000
-    })
+    try {
+      // Verify the session using token hash from URL
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type as 'recovery' | 'invite'
+      })
+
+      if (error) {
+        console.error('Error verifying session:', error)
+        throw error
+      }
+
+      if (data.session) {
+        isValidSession.value = true
+        toast.add({
+          severity: 'success',
+          summary: 'Link válido',
+          detail: type === 'invite' ? 'Bem-vindo! Defina sua senha abaixo.' : 'Defina sua nova senha abaixo.',
+          life: 3000
+        })
+      } else {
+        throw new Error('No session established')
+      }
+    } catch (error: any) {
+      console.error('Session verification failed:', error)
+      toast.add({
+        severity: 'error',
+        summary: 'Link inválido',
+        detail: 'Este link de recuperação é inválido ou expirou. Solicite um novo link.',
+        life: 5000
+      })
+      setTimeout(() => router.push('/login'), 3000)
+    }
+  } else if (accessToken && refreshToken) {
+    // Handle direct token authentication (alternative flow)
+    try {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      })
+
+      if (error) throw error
+
+      if (data.session) {
+        isValidSession.value = true
+        toast.add({
+          severity: 'success',
+          summary: 'Sessão estabelecida',
+          detail: 'Defina sua nova senha abaixo.',
+          life: 3000
+        })
+      } else {
+        throw new Error('Failed to establish session')
+      }
+    } catch (error: any) {
+      console.error('Session setup failed:', error)
+      toast.add({
+        severity: 'error',
+        summary: 'Link inválido',
+        detail: 'Este link de recuperação é inválido ou expirou. Solicite um novo link.',
+        life: 5000
+      })
+      setTimeout(() => router.push('/login'), 3000)
+    }
   } else {
     console.log('No valid token found')
     toast.add({
@@ -278,14 +336,18 @@ const handleResetPassword = async () => {
 .p-inputgroup-addon {
   min-width: 2.5rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .p-inputgroup-addon i {
-  margin-right: 0.25rem;
+  margin: 0;
 }
 
 .p-inputgroup .p-inputtext {
   flex: 1;
+  width: 0;
 }
 
 .reset-actions {

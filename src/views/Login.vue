@@ -168,15 +168,6 @@ const handlePasswordReset = async () => {
             </small>
           </div>
 
-          <div class="field checkbox-field">
-            <Checkbox
-              id="remember"
-              v-model="loginForm.rememberMe"
-              binary
-            />
-            <label for="remember">Lembrar de mim</label>
-          </div>
-
           <div class="login-actions">
             <Button
               label="Entrar"
@@ -375,14 +366,18 @@ const handlePasswordReset = async () => {
 .p-inputgroup-addon {
   min-width: 2.5rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .p-inputgroup-addon i {
-  margin-right: 0.25rem;
+  margin: 0;
 }
 
 .p-inputgroup .p-inputtext {
   flex: 1;
+  width: 0;
 }
 
 .background-decoration {
