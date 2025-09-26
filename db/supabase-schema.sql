@@ -352,59 +352,39 @@ DROP POLICY IF EXISTS "products_delete" ON "ProductsTable";
 CREATE POLICY "products_delete" ON "ProductsTable"
   FOR DELETE TO authenticated USING (true);
 
--- OrdersTable Policies (users can only access their own orders)
+-- OrdersTable Policies (all authenticated users can access all orders)
 DROP POLICY IF EXISTS "orders_select" ON "OrdersTable";
 CREATE POLICY "orders_select" ON "OrdersTable"
-  FOR SELECT TO authenticated USING ("UserId" = auth.uid());
+  FOR SELECT TO authenticated USING (true);
 
 DROP POLICY IF EXISTS "orders_insert" ON "OrdersTable";
 CREATE POLICY "orders_insert" ON "OrdersTable"
-  FOR INSERT TO authenticated WITH CHECK ("UserId" = auth.uid());
+  FOR INSERT TO authenticated WITH CHECK (true);
 
 DROP POLICY IF EXISTS "orders_update" ON "OrdersTable";
 CREATE POLICY "orders_update" ON "OrdersTable"
-  FOR UPDATE TO authenticated USING ("UserId" = auth.uid());
+  FOR UPDATE TO authenticated USING (true);
 
 DROP POLICY IF EXISTS "orders_delete" ON "OrdersTable";
 CREATE POLICY "orders_delete" ON "OrdersTable"
-  FOR DELETE TO authenticated USING ("UserId" = auth.uid());
+  FOR DELETE TO authenticated USING (true);
 
--- OrderItemsTable Policies (access through orders)
+-- OrderItemsTable Policies (all authenticated users can access all order items)
 DROP POLICY IF EXISTS "order_items_select" ON "OrderItemsTable";
 CREATE POLICY "order_items_select" ON "OrderItemsTable"
-  FOR SELECT TO authenticated
-  USING (
-    "OrderId" IN (
-      SELECT "PK" FROM "OrdersTable" WHERE "UserId" = auth.uid()
-    )
-  );
+  FOR SELECT TO authenticated USING (true);
 
 DROP POLICY IF EXISTS "order_items_insert" ON "OrderItemsTable";
 CREATE POLICY "order_items_insert" ON "OrderItemsTable"
-  FOR INSERT TO authenticated
-  WITH CHECK (
-    "OrderId" IN (
-      SELECT "PK" FROM "OrdersTable" WHERE "UserId" = auth.uid()
-    )
-  );
+  FOR INSERT TO authenticated WITH CHECK (true);
 
 DROP POLICY IF EXISTS "order_items_update" ON "OrderItemsTable";
 CREATE POLICY "order_items_update" ON "OrderItemsTable"
-  FOR UPDATE TO authenticated
-  USING (
-    "OrderId" IN (
-      SELECT "PK" FROM "OrdersTable" WHERE "UserId" = auth.uid()
-    )
-  );
+  FOR UPDATE TO authenticated USING (true);
 
 DROP POLICY IF EXISTS "order_items_delete" ON "OrderItemsTable";
 CREATE POLICY "order_items_delete" ON "OrderItemsTable"
-  FOR DELETE TO authenticated
-  USING (
-    "OrderId" IN (
-      SELECT "PK" FROM "OrdersTable" WHERE "UserId" = auth.uid()
-    )
-  );
+  FOR DELETE TO authenticated USING (true);
 
 -- PriceHistoryTable Policies
 DROP POLICY IF EXISTS "price_history_select" ON "PriceHistoryTable";
