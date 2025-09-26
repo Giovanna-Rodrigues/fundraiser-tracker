@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
 
 const toast = useToast()
 
@@ -22,7 +22,7 @@ const roleOptions = ref([
 // Load existing users
 const loadUsers = async () => {
   try {
-    const { data, error } = await supabase.auth.admin.listUsers()
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers()
 
     if (error) throw error
 
@@ -60,7 +60,7 @@ const inviteUser = async () => {
   loading.value = true
 
   try {
-    const { error } = await supabase.auth.admin.inviteUserByEmail(inviteForm.value.email, {
+    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(inviteForm.value.email, {
       data: {
         role: inviteForm.value.role
       },
@@ -98,7 +98,7 @@ const inviteUser = async () => {
 // Delete user
 const deleteUser = async (userId: string, email: string) => {
   try {
-    const { error } = await supabase.auth.admin.deleteUser(userId)
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
 
     if (error) throw error
 
