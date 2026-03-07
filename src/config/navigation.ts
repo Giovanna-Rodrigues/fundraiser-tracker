@@ -31,6 +31,14 @@ export const menuSections: MenuSection[] = [
     ]
   },
   {
+    title: 'Membros',
+    icon: 'pi pi-id-card',
+    items: [
+      { path: '/financial', label: 'Financeiro', icon: 'pi pi-dollar' },
+      { path: '/documents', label: 'Documentos', icon: 'pi pi-file-check' }
+    ]
+  },
+  {
     title: 'Relatórios',
     icon: 'pi pi-chart-bar',
     items: [

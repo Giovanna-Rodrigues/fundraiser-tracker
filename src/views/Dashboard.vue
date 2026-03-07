@@ -35,6 +35,32 @@ const recentSales = computed(() => {
   return fundraiserStore.recentOrders.slice(0, 10)
 })
 
+// Order payment/pickup breakdown (counts for display cards)
+const countPaidPickedUp = computed(() =>
+  fundraiserStore.filteredOrders.filter(o => o.PaymentMethod && o.Status === 'delivered').length
+)
+const countPaidNotPickedUp = computed(() =>
+  fundraiserStore.filteredOrders.filter(o => o.PaymentMethod && o.Status === 'not_picked_up').length
+)
+const countUnpaid = computed(() =>
+  fundraiserStore.filteredOrders.filter(o => !o.PaymentMethod).length
+)
+const totalPaidPickedUp = computed(() =>
+  fundraiserStore.filteredOrders
+    .filter(o => o.PaymentMethod && o.Status === 'delivered')
+    .reduce((sum, o) => sum + o.TotalAmount, 0)
+)
+const totalPaidNotPickedUp = computed(() =>
+  fundraiserStore.filteredOrders
+    .filter(o => o.PaymentMethod && o.Status === 'not_picked_up')
+    .reduce((sum, o) => sum + o.TotalAmount, 0)
+)
+const totalUnpaid = computed(() =>
+  fundraiserStore.filteredOrders
+    .filter(o => !o.PaymentMethod)
+    .reduce((sum, o) => sum + o.TotalAmount, 0)
+)
+
 // Chart data
 const paymentMethodChartData = computed(() => {
   const paymentData = fundraiserStore.salesByPaymentMethod
@@ -118,6 +144,13 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('pt-BR')
 }
 
+const getPaymentLabel = (method: string | undefined | null) => {
+  const labels: Record<string, string> = {
+    card: 'Cartão', cash: 'Dinheiro', 'pix-church': 'Pix Igreja', 'pix-qr': 'Pix QR'
+  }
+  return method ? (labels[method] || method) : 'Pagar depois'
+}
+
 const getRankSeverity = (index: number) => {
   if (index === 0) return 'warning' // Gold
   if (index === 1) return 'secondary' // Silver
@@ -155,6 +188,11 @@ const exportData = () => {
           <h1>Campanha de Arrecadação</h1>
           <p>Clube Genesis</p>
         </div>
+      </div>
+
+      <div class="header-section">
+        <p>Bem-vindo ao Painel de Controle</p>
+        <Button label="Exportar Dados" icon="pi pi-download" @click="exportData" />
       </div>
 
       <!-- Campaign Selector -->
@@ -262,6 +300,42 @@ const exportData = () => {
       </div>
     </div>
 
+    <!-- Order Payment/Pickup Breakdown -->
+    <div class="order-breakdown-grid">
+      <div class="breakdown-card breakdown-success">
+        <div class="breakdown-icon">
+          <i class="pi pi-check-circle"></i>
+        </div>
+        <div class="breakdown-content">
+          <span class="breakdown-label">Pago e Retirado</span>
+          <span class="breakdown-count">{{ countPaidPickedUp }} pedido(s)</span>
+          <span class="breakdown-value">{{ formatCurrency(totalPaidPickedUp) }}</span>
+        </div>
+      </div>
+
+      <div class="breakdown-card breakdown-warning">
+        <div class="breakdown-icon">
+          <i class="pi pi-clock"></i>
+        </div>
+        <div class="breakdown-content">
+          <span class="breakdown-label">Pago, Não Retirado</span>
+          <span class="breakdown-count">{{ countPaidNotPickedUp }} pedido(s)</span>
+          <span class="breakdown-value">{{ formatCurrency(totalPaidNotPickedUp) }}</span>
+        </div>
+      </div>
+
+      <div class="breakdown-card breakdown-danger">
+        <div class="breakdown-icon">
+          <i class="pi pi-wallet"></i>
+        </div>
+        <div class="breakdown-content">
+          <span class="breakdown-label">Não Pago (Pagar Depois)</span>
+          <span class="breakdown-count">{{ countUnpaid }} pedido(s)</span>
+          <span class="breakdown-value">{{ formatCurrency(totalUnpaid) }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Charts Section -->
     <div class="charts-grid">
       <div class="chart-card">
@@ -352,8 +426,8 @@ const exportData = () => {
         <Column field="PaymentMethod" header="Pagamento">
           <template #body="{ data }">
             <Tag
-              :value="data.PaymentMethod === 'card' ? 'Cartão' : 'Pix'"
-              :severity="data.PaymentMethod === 'card' ? 'info' : 'success'"
+              :value="getPaymentLabel(data.PaymentMethod)"
+              :severity="data.PaymentMethod ? (data.PaymentMethod === 'card' ? 'info' : 'success') : 'warning'"
             />
           </template>
         </Column>
@@ -440,6 +514,61 @@ const exportData = () => {
 
 .mr-2 {
   margin-right: 0.5rem;
+}
+
+.order-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.breakdown-card {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-left: 4px solid transparent;
+}
+
+.breakdown-card.breakdown-success { border-left-color: #22c55e; }
+.breakdown-card.breakdown-warning { border-left-color: #f59e0b; }
+.breakdown-card.breakdown-danger  { border-left-color: #ef4444; }
+
+.breakdown-icon {
+  font-size: 1.75rem;
+}
+
+.breakdown-card.breakdown-success .breakdown-icon { color: #22c55e; }
+.breakdown-card.breakdown-warning .breakdown-icon { color: #f59e0b; }
+.breakdown-card.breakdown-danger  .breakdown-icon { color: #ef4444; }
+
+.breakdown-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.breakdown-label {
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.breakdown-count {
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.breakdown-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #2c3e50;
 }
 
 .metrics-grid {

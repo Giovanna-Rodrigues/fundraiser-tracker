@@ -3,7 +3,7 @@
 -- ============================================
 -- This script creates all tables with auto-generated PK/SK patterns
 -- Pattern: PATHFINDER#<uuid>, PRODUCT#<uuid>, ORDER#<uuid>, etc.
--- Includes: Campaigns and Combo Products functionality
+-- Includes: Campaigns, Combo Products, Financial Tracking, Document Management
 -- ============================================
 
 -- ============================================
@@ -13,18 +13,29 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
--- 2. CREATE OR UPDATE PATHFINDERS TABLE
+-- 2. CREATE PATHFINDERS TABLE
 -- ============================================
 
--- Drop table if exists to recreate with proper constraints
 DROP TABLE IF EXISTS "PathfindersTable" CASCADE;
 
--- Create PathfindersTable
 CREATE TABLE "PathfindersTable" (
   "PK" TEXT PRIMARY KEY,
   "SK" TEXT NOT NULL,
   "Name" TEXT NOT NULL,
-  "CreatedAt" TIMESTAMPTZ DEFAULT NOW()
+  "Type" TEXT DEFAULT 'desbravador' CHECK ("Type" IN ('desbravador', 'staff', 'directors')),
+  "Email" TEXT,
+  "Phone" TEXT,
+  "ParentName" TEXT,
+  "ParentEmail" TEXT,
+  "ParentPhone" TEXT,
+  "BirthDate" DATE,
+  "Address" TEXT,
+  "Notes" TEXT,
+  "IsActive" BOOLEAN DEFAULT true,
+  "RegistrationYear" INTEGER,
+  "Documents" JSONB DEFAULT '{}'::jsonb,
+  "CreatedAt" TIMESTAMPTZ DEFAULT NOW(),
+  "UpdatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Function to generate Pathfinder PK/SK
@@ -41,12 +52,31 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for PathfindersTable
 DROP TRIGGER IF EXISTS pathfinder_pk_trigger ON "PathfindersTable";
 CREATE TRIGGER pathfinder_pk_trigger
   BEFORE INSERT ON "PathfindersTable"
   FOR EACH ROW
   EXECUTE FUNCTION generate_pathfinder_pk();
+
+-- Trigger to auto-update UpdatedAt
+CREATE OR REPLACE FUNCTION update_pathfinder_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW."UpdatedAt" = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS pathfinder_updated_at_trigger ON "PathfindersTable";
+CREATE TRIGGER pathfinder_updated_at_trigger
+  BEFORE UPDATE ON "PathfindersTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION update_pathfinder_updated_at();
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_pathfinders_type ON "PathfindersTable"("Type");
+CREATE INDEX IF NOT EXISTS idx_pathfinders_active ON "PathfindersTable"("IsActive");
+CREATE INDEX IF NOT EXISTS idx_pathfinders_registration_year ON "PathfindersTable"("RegistrationYear");
 
 -- ============================================
 -- 3. CREATE CAMPAIGNS TABLE
@@ -80,7 +110,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for CampaignsTable
 DROP TRIGGER IF EXISTS campaign_pk_trigger ON "CampaignsTable";
 CREATE TRIGGER campaign_pk_trigger
   BEFORE INSERT ON "CampaignsTable"
@@ -88,13 +117,11 @@ CREATE TRIGGER campaign_pk_trigger
   EXECUTE FUNCTION generate_campaign_pk();
 
 -- ============================================
--- 4. CREATE OR UPDATE PRODUCTS TABLE (WITH COMBO SUPPORT)
+-- 4. CREATE PRODUCTS TABLE (WITH COMBO SUPPORT)
 -- ============================================
 
--- Drop table if exists to recreate with proper constraints
 DROP TABLE IF EXISTS "ProductsTable" CASCADE;
 
--- Create ProductsTable with Combo support
 CREATE TABLE "ProductsTable" (
   "PK" TEXT PRIMARY KEY,
   "SK" TEXT NOT NULL,
@@ -121,7 +148,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for ProductsTable
 DROP TRIGGER IF EXISTS product_pk_trigger ON "ProductsTable";
 CREATE TRIGGER product_pk_trigger
   BEFORE INSERT ON "ProductsTable"
@@ -157,7 +183,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger to validate combo items
 DROP TRIGGER IF EXISTS validate_combo_items_trigger ON "ProductsTable";
 CREATE TRIGGER validate_combo_items_trigger
   BEFORE INSERT OR UPDATE ON "ProductsTable"
@@ -165,7 +190,237 @@ CREATE TRIGGER validate_combo_items_trigger
   EXECUTE FUNCTION validate_combo_items();
 
 -- ============================================
--- 5. CREATE ORDERS TABLE (WITH CAMPAIGN SUPPORT)
+-- 5. CREATE FEE TYPES TABLE
+-- ============================================
+
+DROP TABLE IF EXISTS "FeeTypesTable" CASCADE;
+
+CREATE TABLE "FeeTypesTable" (
+  "PK" TEXT PRIMARY KEY,
+  "SK" TEXT NOT NULL,
+  "Name" TEXT NOT NULL,
+  "Description" TEXT,
+  "Amount" NUMERIC(10,2) NOT NULL CHECK ("Amount" >= 0),
+  "FeeCategory" TEXT NOT NULL CHECK ("FeeCategory" IN ('membership', 'monthly', 'event', 'equipment', 'other')),
+  "RecurrenceType" TEXT CHECK ("RecurrenceType" IN ('one-time', 'monthly', 'annual')),
+  "AppliesTo" TEXT[] DEFAULT ARRAY['desbravador', 'staff', 'directors'],
+  "DueDate" DATE,
+  "IsActive" BOOLEAN DEFAULT true,
+  "Year" INTEGER,
+  "CreatedAt" TIMESTAMPTZ DEFAULT NOW(),
+  "UpdatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Function to generate FeeType PK/SK
+CREATE OR REPLACE FUNCTION generate_fee_type_pk()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."PK" IS NULL OR NEW."PK" = '' THEN
+    NEW."PK" := 'FEETYPE#' || uuid_generate_v4();
+  END IF;
+  IF NEW."SK" IS NULL OR NEW."SK" = '' THEN
+    NEW."SK" := NEW."PK";
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS fee_type_pk_trigger ON "FeeTypesTable";
+CREATE TRIGGER fee_type_pk_trigger
+  BEFORE INSERT ON "FeeTypesTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_fee_type_pk();
+
+-- Trigger for UpdatedAt
+CREATE OR REPLACE FUNCTION update_fee_type_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW."UpdatedAt" = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS fee_type_updated_at_trigger ON "FeeTypesTable";
+CREATE TRIGGER fee_type_updated_at_trigger
+  BEFORE UPDATE ON "FeeTypesTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION update_fee_type_updated_at();
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_fee_types_category ON "FeeTypesTable"("FeeCategory");
+CREATE INDEX IF NOT EXISTS idx_fee_types_active ON "FeeTypesTable"("IsActive");
+CREATE INDEX IF NOT EXISTS idx_fee_types_year ON "FeeTypesTable"("Year");
+CREATE INDEX IF NOT EXISTS idx_fee_types_due_date ON "FeeTypesTable"("DueDate");
+
+-- ============================================
+-- 6. CREATE PATHFINDER FEES TABLE
+-- ============================================
+
+DROP TABLE IF EXISTS "PathfinderFeesTable" CASCADE;
+
+CREATE TABLE "PathfinderFeesTable" (
+  "PK" TEXT PRIMARY KEY,
+  "SK" TEXT NOT NULL,
+  "PathfinderId" TEXT NOT NULL REFERENCES "PathfindersTable"("PK") ON DELETE CASCADE,
+  "FeeTypeId" TEXT NOT NULL REFERENCES "FeeTypesTable"("PK") ON DELETE CASCADE,
+  "Amount" NUMERIC(10,2) NOT NULL CHECK ("Amount" >= 0),
+  "DueDate" DATE NOT NULL,
+  "Status" TEXT DEFAULT 'pending' CHECK ("Status" IN ('pending', 'partial', 'paid', 'overdue', 'waived')),
+  "AmountPaid" NUMERIC(10,2) DEFAULT 0 CHECK ("AmountPaid" >= 0),
+  "AmountRemaining" NUMERIC(10,2) NOT NULL CHECK ("AmountRemaining" >= 0),
+  "Notes" TEXT,
+  "AssignedAt" TIMESTAMPTZ DEFAULT NOW(),
+  "CreatedAt" TIMESTAMPTZ DEFAULT NOW(),
+  "UpdatedAt" TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE ("PathfinderId", "FeeTypeId")
+);
+
+-- Function to generate PathfinderFee PK/SK and calculate amounts
+CREATE OR REPLACE FUNCTION generate_pathfinder_fee_pk()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."PK" IS NULL OR NEW."PK" = '' THEN
+    NEW."PK" := 'PATHFINDERFEE#' || uuid_generate_v4();
+  END IF;
+  IF NEW."SK" IS NULL OR NEW."SK" = '' THEN
+    NEW."SK" := NEW."PK";
+  END IF;
+
+  -- Auto-calculate AmountRemaining
+  NEW."AmountRemaining" := NEW."Amount" - COALESCE(NEW."AmountPaid", 0);
+
+  -- Auto-update status based on payment
+  IF NEW."AmountPaid" >= NEW."Amount" THEN
+    NEW."Status" := 'paid';
+  ELSIF NEW."AmountPaid" > 0 THEN
+    NEW."Status" := 'partial';
+  ELSIF NEW."DueDate" < CURRENT_DATE AND NEW."Status" = 'pending' THEN
+    NEW."Status" := 'overdue';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS pathfinder_fee_pk_trigger ON "PathfinderFeesTable";
+CREATE TRIGGER pathfinder_fee_pk_trigger
+  BEFORE INSERT ON "PathfinderFeesTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_pathfinder_fee_pk();
+
+-- Trigger to update status/remaining on update
+CREATE OR REPLACE FUNCTION update_pathfinder_fee_status()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW."AmountRemaining" := NEW."Amount" - COALESCE(NEW."AmountPaid", 0);
+
+  IF NEW."AmountPaid" >= NEW."Amount" THEN
+    NEW."Status" := 'paid';
+  ELSIF NEW."AmountPaid" > 0 THEN
+    NEW."Status" := 'partial';
+  ELSIF NEW."DueDate" < CURRENT_DATE AND NEW."Status" IN ('pending', 'partial') THEN
+    NEW."Status" := 'overdue';
+  END IF;
+
+  NEW."UpdatedAt" := NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS pathfinder_fee_status_trigger ON "PathfinderFeesTable";
+CREATE TRIGGER pathfinder_fee_status_trigger
+  BEFORE UPDATE ON "PathfinderFeesTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION update_pathfinder_fee_status();
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_pathfinder_fees_pathfinder ON "PathfinderFeesTable"("PathfinderId");
+CREATE INDEX IF NOT EXISTS idx_pathfinder_fees_type ON "PathfinderFeesTable"("FeeTypeId");
+CREATE INDEX IF NOT EXISTS idx_pathfinder_fees_status ON "PathfinderFeesTable"("Status");
+CREATE INDEX IF NOT EXISTS idx_pathfinder_fees_due_date ON "PathfinderFeesTable"("DueDate");
+
+-- ============================================
+-- 7. CREATE PAYMENTS TABLE
+-- ============================================
+
+DROP TABLE IF EXISTS "PaymentsTable" CASCADE;
+
+CREATE TABLE "PaymentsTable" (
+  "PK" TEXT PRIMARY KEY,
+  "SK" TEXT NOT NULL,
+  "PathfinderId" TEXT NOT NULL REFERENCES "PathfindersTable"("PK") ON DELETE CASCADE,
+  "PathfinderFeeId" TEXT NOT NULL REFERENCES "PathfinderFeesTable"("PK") ON DELETE CASCADE,
+  "Amount" NUMERIC(10,2) NOT NULL CHECK ("Amount" > 0),
+  "PaymentMethod" TEXT NOT NULL CHECK ("PaymentMethod" IN ('card', 'cash', 'pix-church', 'pix-qr', '7me', 'church')),
+  "PaymentDate" DATE NOT NULL DEFAULT CURRENT_DATE,
+  "ReceivedBy" UUID REFERENCES auth.users(id),
+  "Notes" TEXT,
+  "ReceiptNumber" TEXT,
+  "CreatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Function to generate Payment PK/SK
+CREATE OR REPLACE FUNCTION generate_payment_pk()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."PK" IS NULL OR NEW."PK" = '' THEN
+    NEW."PK" := 'PAYMENT#' || uuid_generate_v4();
+  END IF;
+  IF NEW."SK" IS NULL OR NEW."SK" = '' THEN
+    NEW."SK" := NEW."PK";
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS payment_pk_trigger ON "PaymentsTable";
+CREATE TRIGGER payment_pk_trigger
+  BEFORE INSERT ON "PaymentsTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION generate_payment_pk();
+
+-- CRITICAL TRIGGER: Update PathfinderFee AmountPaid when payment is added
+CREATE OR REPLACE FUNCTION update_pathfinder_fee_on_payment()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE "PathfinderFeesTable"
+  SET "AmountPaid" = "AmountPaid" + NEW."Amount"
+  WHERE "PK" = NEW."PathfinderFeeId";
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS payment_update_fee_trigger ON "PaymentsTable";
+CREATE TRIGGER payment_update_fee_trigger
+  AFTER INSERT ON "PaymentsTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION update_pathfinder_fee_on_payment();
+
+-- CRITICAL TRIGGER: Revert PathfinderFee AmountPaid when payment is deleted
+CREATE OR REPLACE FUNCTION revert_pathfinder_fee_on_payment_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE "PathfinderFeesTable"
+  SET "AmountPaid" = "AmountPaid" - OLD."Amount"
+  WHERE "PK" = OLD."PathfinderFeeId";
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS payment_delete_fee_trigger ON "PaymentsTable";
+CREATE TRIGGER payment_delete_fee_trigger
+  AFTER DELETE ON "PaymentsTable"
+  FOR EACH ROW
+  EXECUTE FUNCTION revert_pathfinder_fee_on_payment_delete();
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_payments_pathfinder ON "PaymentsTable"("PathfinderId");
+CREATE INDEX IF NOT EXISTS idx_payments_fee ON "PaymentsTable"("PathfinderFeeId");
+CREATE INDEX IF NOT EXISTS idx_payments_date ON "PaymentsTable"("PaymentDate");
+CREATE INDEX IF NOT EXISTS idx_payments_method ON "PaymentsTable"("PaymentMethod");
+
+-- ============================================
+-- 8. CREATE ORDERS TABLE (WITH CAMPAIGN SUPPORT)
 -- ============================================
 
 DROP TABLE IF EXISTS "OrdersTable" CASCADE;
@@ -188,8 +443,7 @@ CREATE TABLE "OrdersTable" (
 );
 
 -- Create index for better query performance
-CREATE INDEX IF NOT EXISTS idx_orders_campaign
-  ON "OrdersTable"("CampaignId");
+CREATE INDEX IF NOT EXISTS idx_orders_campaign ON "OrdersTable"("CampaignId");
 
 -- Function to generate Order PK/SK
 CREATE OR REPLACE FUNCTION generate_order_pk()
@@ -205,7 +459,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for OrdersTable
 DROP TRIGGER IF EXISTS order_pk_trigger ON "OrdersTable";
 CREATE TRIGGER order_pk_trigger
   BEFORE INSERT ON "OrdersTable"
@@ -213,7 +466,7 @@ CREATE TRIGGER order_pk_trigger
   EXECUTE FUNCTION generate_order_pk();
 
 -- ============================================
--- 6. CREATE ORDER ITEMS TABLE
+-- 9. CREATE ORDER ITEMS TABLE
 -- ============================================
 
 DROP TABLE IF EXISTS "OrderItemsTable" CASCADE;
@@ -244,7 +497,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for OrderItemsTable
 DROP TRIGGER IF EXISTS order_item_pk_trigger ON "OrderItemsTable";
 CREATE TRIGGER order_item_pk_trigger
   BEFORE INSERT ON "OrderItemsTable"
@@ -252,7 +504,7 @@ CREATE TRIGGER order_item_pk_trigger
   EXECUTE FUNCTION generate_order_item_pk();
 
 -- ============================================
--- 7. CREATE PRICE HISTORY TABLE
+-- 10. CREATE PRICE HISTORY TABLE
 -- ============================================
 
 DROP TABLE IF EXISTS "PriceHistoryTable" CASCADE;
@@ -282,7 +534,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger for PriceHistoryTable
 DROP TRIGGER IF EXISTS price_history_pk_trigger ON "PriceHistoryTable";
 CREATE TRIGGER price_history_pk_trigger
   BEFORE INSERT ON "PriceHistoryTable"
@@ -290,13 +541,16 @@ CREATE TRIGGER price_history_pk_trigger
   EXECUTE FUNCTION generate_price_history_pk();
 
 -- ============================================
--- 8. ROW LEVEL SECURITY (RLS) POLICIES
+-- 11. ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================
 
 -- Enable RLS on all tables
 ALTER TABLE "PathfindersTable" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "CampaignsTable" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ProductsTable" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "FeeTypesTable" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PathfinderFeesTable" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PaymentsTable" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "OrdersTable" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "OrderItemsTable" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "PriceHistoryTable" ENABLE ROW LEVEL SECURITY;
@@ -352,7 +606,58 @@ DROP POLICY IF EXISTS "products_delete" ON "ProductsTable";
 CREATE POLICY "products_delete" ON "ProductsTable"
   FOR DELETE TO authenticated USING (true);
 
--- OrdersTable Policies (all authenticated users can access all orders)
+-- FeeTypesTable Policies
+DROP POLICY IF EXISTS "fee_types_select" ON "FeeTypesTable";
+CREATE POLICY "fee_types_select" ON "FeeTypesTable"
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "fee_types_insert" ON "FeeTypesTable";
+CREATE POLICY "fee_types_insert" ON "FeeTypesTable"
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "fee_types_update" ON "FeeTypesTable";
+CREATE POLICY "fee_types_update" ON "FeeTypesTable"
+  FOR UPDATE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "fee_types_delete" ON "FeeTypesTable";
+CREATE POLICY "fee_types_delete" ON "FeeTypesTable"
+  FOR DELETE TO authenticated USING (true);
+
+-- PathfinderFeesTable Policies
+DROP POLICY IF EXISTS "pathfinder_fees_select" ON "PathfinderFeesTable";
+CREATE POLICY "pathfinder_fees_select" ON "PathfinderFeesTable"
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "pathfinder_fees_insert" ON "PathfinderFeesTable";
+CREATE POLICY "pathfinder_fees_insert" ON "PathfinderFeesTable"
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "pathfinder_fees_update" ON "PathfinderFeesTable";
+CREATE POLICY "pathfinder_fees_update" ON "PathfinderFeesTable"
+  FOR UPDATE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "pathfinder_fees_delete" ON "PathfinderFeesTable";
+CREATE POLICY "pathfinder_fees_delete" ON "PathfinderFeesTable"
+  FOR DELETE TO authenticated USING (true);
+
+-- PaymentsTable Policies
+DROP POLICY IF EXISTS "payments_select" ON "PaymentsTable";
+CREATE POLICY "payments_select" ON "PaymentsTable"
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "payments_insert" ON "PaymentsTable";
+CREATE POLICY "payments_insert" ON "PaymentsTable"
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "payments_update" ON "PaymentsTable";
+CREATE POLICY "payments_update" ON "PaymentsTable"
+  FOR UPDATE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "payments_delete" ON "PaymentsTable";
+CREATE POLICY "payments_delete" ON "PaymentsTable"
+  FOR DELETE TO authenticated USING (true);
+
+-- OrdersTable Policies
 DROP POLICY IF EXISTS "orders_select" ON "OrdersTable";
 CREATE POLICY "orders_select" ON "OrdersTable"
   FOR SELECT TO authenticated USING (true);
@@ -369,7 +674,7 @@ DROP POLICY IF EXISTS "orders_delete" ON "OrdersTable";
 CREATE POLICY "orders_delete" ON "OrdersTable"
   FOR DELETE TO authenticated USING (true);
 
--- OrderItemsTable Policies (all authenticated users can access all order items)
+-- OrderItemsTable Policies
 DROP POLICY IF EXISTS "order_items_select" ON "OrderItemsTable";
 CREATE POLICY "order_items_select" ON "OrderItemsTable"
   FOR SELECT TO authenticated USING (true);
@@ -404,7 +709,7 @@ CREATE POLICY "price_history_delete" ON "PriceHistoryTable"
   FOR DELETE TO authenticated USING (true);
 
 -- ============================================
--- 9. HELPER FUNCTIONS
+-- 12. HELPER FUNCTIONS
 -- ============================================
 
 -- Function to get active campaign
@@ -461,11 +766,79 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to get document completion status for a pathfinder
+CREATE OR REPLACE FUNCTION get_document_completion(pathfinder_type TEXT, documents JSONB)
+RETURNS TABLE (
+  total_required INTEGER,
+  total_received INTEGER,
+  completion_percentage NUMERIC
+) AS $$
+DECLARE
+  required_docs TEXT[];
+  received_count INTEGER := 0;
+  doc_key TEXT;
+BEGIN
+  CASE pathfinder_type
+    WHEN 'desbravador' THEN
+      required_docs := ARRAY['id_cpf', 'sus_card', 'proof_residence', 'parent_id_cpf', 'vaccination_card'];
+    WHEN 'staff' THEN
+      required_docs := ARRAY['id_cpf', 'sus_card', 'proof_residence', 'criminal_background'];
+    WHEN 'directors' THEN
+      required_docs := ARRAY['id_cpf', 'sus_card', 'proof_residence', 'criminal_background'];
+    ELSE
+      required_docs := ARRAY['id_cpf', 'sus_card', 'proof_residence'];
+  END CASE;
+
+  FOREACH doc_key IN ARRAY required_docs LOOP
+    IF (documents->doc_key->>'status') = 'received' THEN
+      received_count := received_count + 1;
+    END IF;
+  END LOOP;
+
+  RETURN QUERY SELECT
+    array_length(required_docs, 1) AS total_required,
+    received_count AS total_received,
+    CASE
+      WHEN array_length(required_docs, 1) = 0 THEN 0
+      ELSE ROUND((received_count::NUMERIC / array_length(required_docs, 1)::NUMERIC) * 100, 2)
+    END AS completion_percentage;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to auto-mark overdue fees
+CREATE OR REPLACE FUNCTION mark_overdue_fees()
+RETURNS void AS $$
+BEGIN
+  UPDATE "PathfinderFeesTable"
+  SET "Status" = 'overdue'
+  WHERE "Status" IN ('pending', 'partial')
+    AND "DueDate" < CURRENT_DATE
+    AND "AmountRemaining" > 0;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create view for financial summary by pathfinder
+CREATE OR REPLACE VIEW pathfinder_financial_summary AS
+SELECT
+  pf."PK" AS pathfinder_id,
+  pf."Name" AS pathfinder_name,
+  pf."Type" AS pathfinder_type,
+  COUNT(DISTINCT fees."PK") AS total_fees_assigned,
+  COALESCE(SUM(fees."Amount"), 0) AS total_amount_owed,
+  COALESCE(SUM(fees."AmountPaid"), 0) AS total_amount_paid,
+  COALESCE(SUM(fees."AmountRemaining"), 0) AS total_amount_remaining,
+  COUNT(CASE WHEN fees."Status" = 'overdue' THEN 1 END) AS overdue_fees_count,
+  COUNT(CASE WHEN fees."Status" = 'paid' THEN 1 END) AS paid_fees_count,
+  COUNT(DISTINCT payments."PK") AS total_payments_made
+FROM "PathfindersTable" pf
+LEFT JOIN "PathfinderFeesTable" fees ON fees."PathfinderId" = pf."PK"
+LEFT JOIN "PaymentsTable" payments ON payments."PathfinderId" = pf."PK"
+GROUP BY pf."PK", pf."Name", pf."Type";
+
 -- ============================================
--- 10. CREATE DEFAULT CAMPAIGN FOR EXISTING DATA
+-- 13. CREATE DEFAULT CAMPAIGN
 -- ============================================
 
--- Insert a default campaign for existing orders
 INSERT INTO "CampaignsTable" ("Name", "StartDate", "EndDate", "Status", "Description")
 VALUES (
   'Campanha Inicial',
@@ -476,33 +849,9 @@ VALUES (
 )
 ON CONFLICT DO NOTHING;
 
--- Update existing orders to belong to the default campaign
 UPDATE "OrdersTable"
 SET "CampaignId" = (SELECT "PK" FROM "CampaignsTable" WHERE "Name" = 'Campanha Inicial')
 WHERE "CampaignId" IS NULL;
-
--- ============================================
--- 11. INSERT INITIAL PRODUCTS (OPTIONAL)
--- ============================================
-
--- Uncomment to insert default products:
--- INSERT INTO "ProductsTable" ("Name", "Price", "Category", "Flavors", "Description") VALUES
--- ('Mini Pizza', 6.00, 'pizza', ARRAY['Margherita', 'Pepperoni', 'Calabresa', 'Frango', 'Portuguesa', 'Vegetariana'], 'Mini pizza individual com diversos sabores'),
--- ('Pastel', 9.00, 'pastry', ARRAY['Carne', 'Queijo', 'Pizza', 'Frango', 'Palmito', 'Doce de Leite'], 'Pastel frito crocante'),
--- ('Sorvete', 5.00, 'ice-cream', ARRAY['Chocolate', 'Morango', 'Baunilha', 'Napolitano', 'Coco', 'Açaí'], 'Sorvete cremoso');
-
--- Example Combo Product (uncomment and adjust product IDs):
--- INSERT INTO "ProductsTable" ("Name", "Price", "Category", "Description", "ComboItems")
--- VALUES (
---   'Combo 1 - Pizza + Pastel',
---   13.00,
---   'combo',
---   '1 Mini Pizza + 1 Pastel - Escolha os sabores!',
---   '[
---     {"ProductId": "PRODUCT#your-pizza-id", "Quantity": 1, "AllowFlavorSelection": true},
---     {"ProductId": "PRODUCT#your-pastel-id", "Quantity": 1, "AllowFlavorSelection": true}
---   ]'::jsonb
--- );
 
 -- ============================================
 -- DONE!
@@ -511,18 +860,23 @@ WHERE "CampaignId" IS NULL;
 -- Pattern: PATHFINDER#<uuid>
 --         CAMPAIGN#<uuid>
 --         PRODUCT#<uuid>
+--         FEETYPE#<uuid>
+--         PATHFINDERFEE#<uuid>
+--         PAYMENT#<uuid>
 --         ORDER#<uuid>
 --         ORDERITEM#<uuid>
 --         PRICEHISTORY#<uuid>
 --
 -- Features included:
--- ✅ Pathfinders management
+-- ✅ Pathfinders management with types and documents
 -- ✅ Campaign tracking (monthly/periodic fundraisers)
--- ✅ Products with flavors
--- ✅ Combo/Bundle products with flavor selection
+-- ✅ Products with flavors and combo support
+-- ✅ Financial tracking (fees, payments, installments)
+-- ✅ Document management (checkbox status tracking)
 -- ✅ Orders with campaign assignment
 -- ✅ Order items tracking
 -- ✅ Price history
 -- ✅ Row Level Security (RLS)
 -- ✅ Helper functions
+-- ✅ Payment triggers (auto-update fee status)
 -- ============================================

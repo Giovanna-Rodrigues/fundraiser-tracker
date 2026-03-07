@@ -11,6 +11,16 @@ const toast = useToast()
 // Component state
 const showOrderDetails = ref(false)
 const selectedOrder = ref<Order | null>(null)
+const showPaymentDialog = ref(false)
+const paymentOrder = ref<Order | null>(null)
+const selectedPaymentMethod = ref<string | null>(null)
+
+const paymentMethodOptions = [
+  { label: 'Cartão', value: 'card' },
+  { label: 'Dinheiro', value: 'cash' },
+  { label: 'Pix Igreja', value: 'pix-church' },
+  { label: 'Pix QR', value: 'pix-qr' }
+]
 
 // Filters
 const filters = ref({
@@ -34,7 +44,8 @@ const statusFilterOptions = ref([
   { label: 'Pendente', value: 'pending' },
   { label: 'Preparando', value: 'preparing' },
   { label: 'Pronto', value: 'ready' },
-  { label: 'Entregue', value: 'delivered' }
+  { label: 'Entregue', value: 'delivered' },
+  { label: 'Não Retirado', value: 'not_picked_up' }
 ])
 
 const filteredOrders = computed(() => {
@@ -86,7 +97,8 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('pt-BR')
 }
 
-const getPaymentMethodLabel = (method: string) => {
+const getPaymentMethodLabel = (method: string | null | undefined) => {
+  if (!method) return 'Pagar depois'
   const labels: Record<string, string> = {
     card: 'Cartão',
     cash: 'Dinheiro',
@@ -96,12 +108,13 @@ const getPaymentMethodLabel = (method: string) => {
   return labels[method] || method
 }
 
-const getPaymentMethodSeverity = (method: string) => {
+const getPaymentMethodSeverity = (method: string | null | undefined) => {
+  if (!method) return 'warn'
   const severities: Record<string, string> = {
     card: 'info',
     cash: 'success',
-    'pix-church': 'warning',
-    'pix-qr': 'warning'
+    'pix-church': 'warn',
+    'pix-qr': 'warn'
   }
   return severities[method] || 'secondary'
 }
@@ -111,17 +124,19 @@ const getStatusLabel = (status: string) => {
     pending: 'Pendente',
     preparing: 'Preparando',
     ready: 'Pronto',
-    delivered: 'Entregue'
+    delivered: 'Entregue',
+    not_picked_up: 'Não Retirado'
   }
   return labels[status] || status
 }
 
 const getStatusSeverity = (status: string) => {
   const severities: Record<string, string> = {
-    pending: 'warning',
+    pending: 'warn',
     preparing: 'info',
     ready: 'success',
-    delivered: 'secondary'
+    delivered: 'secondary',
+    not_picked_up: 'danger'
   }
   return severities[status] || 'secondary'
 }
@@ -142,6 +157,34 @@ const clearFilters = () => {
 const viewOrderDetails = (order: Order) => {
   selectedOrder.value = order
   showOrderDetails.value = true
+}
+
+const openPaymentDialog = (order: Order) => {
+  paymentOrder.value = order
+  selectedPaymentMethod.value = null
+  showPaymentDialog.value = true
+}
+
+const confirmPayment = async () => {
+  if (!paymentOrder.value || !selectedPaymentMethod.value) return
+  try {
+    await fundraiserStore.updateOrder(paymentOrder.value.PK, {
+      PaymentMethod: selectedPaymentMethod.value as any
+    })
+    toast.add({ severity: 'success', summary: 'Pagamento registrado', life: 3000 })
+    showPaymentDialog.value = false
+  } catch {
+    toast.add({ severity: 'error', summary: 'Erro ao registrar pagamento', life: 3000 })
+  }
+}
+
+const markNotPickedUp = async (order: Order) => {
+  try {
+    await fundraiserStore.updateOrderStatus(order.PK, 'not_picked_up')
+    toast.add({ severity: 'info', summary: 'Pedido marcado como não retirado', life: 3000 })
+  } catch {
+    toast.add({ severity: 'error', summary: 'Erro ao atualizar pedido', life: 3000 })
+  }
 }
 
 const exportData = () => {
@@ -343,14 +386,30 @@ const exportData = () => {
             </template>
           </Column>
 
-          <Column header="Ações" style="width: 100px">
+          <Column header="Ações" style="width: 180px">
             <template #body="{ data }">
-              <Button
-                icon="pi pi-eye"
-                class="p-button-outlined p-button-sm"
-                @click="viewOrderDetails(data)"
-                v-tooltip.top="'Ver detalhes'"
-              />
+              <div class="row-actions">
+                <Button
+                  icon="pi pi-eye"
+                  class="p-button-outlined p-button-sm"
+                  @click="viewOrderDetails(data)"
+                  v-tooltip.top="'Ver detalhes'"
+                />
+                <Button
+                  v-if="!data.PaymentMethod"
+                  icon="pi pi-credit-card"
+                  class="p-button-sm p-button-warning"
+                  @click="openPaymentDialog(data)"
+                  v-tooltip.top="'Registrar pagamento'"
+                />
+                <Button
+                  v-if="data.Status !== 'delivered' && data.Status !== 'not_picked_up'"
+                  icon="pi pi-ban"
+                  class="p-button-sm p-button-danger p-button-outlined"
+                  @click="markNotPickedUp(data)"
+                  v-tooltip.top="'Marcar como não retirado'"
+                />
+              </div>
             </template>
           </Column>
         </DataTable>
@@ -447,6 +506,45 @@ const exportData = () => {
           icon="pi pi-times"
           class="p-button-text"
           @click="showOrderDetails = false"
+        />
+      </template>
+    </Dialog>
+
+    <!-- Payment Registration Dialog -->
+    <Dialog
+      v-model:visible="showPaymentDialog"
+      header="Registrar Pagamento"
+      :modal="true"
+      style="width: 400px"
+    >
+      <div v-if="paymentOrder" class="payment-dialog-content">
+        <p>Pedido <strong>#{{ paymentOrder.PK }}</strong> — {{ paymentOrder.CustomerName }}</p>
+        <p class="payment-amount">Total: <strong>{{ formatCurrency(paymentOrder.TotalAmount) }}</strong></p>
+
+        <div class="field">
+          <label>Forma de pagamento</label>
+          <Dropdown
+            v-model="selectedPaymentMethod"
+            :options="paymentMethodOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Selecione a forma de pagamento"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button
+          label="Cancelar"
+          icon="pi pi-times"
+          class="p-button-text"
+          @click="showPaymentDialog = false"
+        />
+        <Button
+          label="Confirmar"
+          icon="pi pi-check"
+          :disabled="!selectedPaymentMethod"
+          @click="confirmPayment"
         />
       </template>
     </Dialog>
@@ -723,6 +821,25 @@ const exportData = () => {
   background: #f8f9fa;
   border-radius: 0.5rem;
   color: #495057;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.payment-dialog-content {
+  padding: 0.5rem 0;
+}
+
+.payment-dialog-content .field {
+  margin-top: 1rem;
+}
+
+.payment-amount {
+  color: #2c3e50;
+  font-size: 1rem;
 }
 
 @media (max-width: 768px) {

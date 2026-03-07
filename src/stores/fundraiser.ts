@@ -6,7 +6,109 @@ export interface Pathfinder {
   PK: string // PATHFINDER#<uuid>
   SK: string
   Name: string
+  Type: 'desbravador' | 'staff' | 'directors'
+  Email?: string
+  Phone?: string
+  ParentName?: string
+  ParentEmail?: string
+  ParentPhone?: string
+  BirthDate?: string
+  Address?: string
+  Notes?: string
+  IsActive: boolean
+  RegistrationYear?: number
+  Documents: DocumentStatusMap
   CreatedAt: string
+  UpdatedAt: string
+}
+
+export interface DocumentStatus {
+  status: 'received' | 'missing'
+  updatedAt?: string
+  updatedBy?: string
+  expiryDate?: string // For criminal background checks
+  notes?: string
+}
+
+export interface DocumentStatusMap {
+  id_cpf?: DocumentStatus
+  sus_card?: DocumentStatus
+  proof_residence?: DocumentStatus
+  parent_id_cpf?: DocumentStatus
+  vaccination_card?: DocumentStatus
+  criminal_background?: DocumentStatus
+  health_insurance?: DocumentStatus
+}
+
+export interface FeeType {
+  PK: string // FEETYPE#<uuid>
+  SK: string
+  Name: string
+  Description?: string
+  Amount: number
+  FeeCategory: 'membership' | 'monthly' | 'event' | 'equipment' | 'other'
+  RecurrenceType?: 'one-time' | 'monthly' | 'annual'
+  AppliesTo: ('desbravador' | 'staff' | 'directors')[]
+  DueDate?: string
+  IsActive: boolean
+  Year?: number
+  CreatedAt: string
+  UpdatedAt: string
+}
+
+export interface PathfinderFee {
+  PK: string // PATHFINDERFEE#<uuid>
+  SK: string
+  PathfinderId: string
+  FeeTypeId: string
+  Amount: number
+  DueDate: string
+  Status: 'pending' | 'partial' | 'paid' | 'overdue' | 'waived'
+  AmountPaid: number
+  AmountRemaining: number
+  Notes?: string
+  AssignedAt: string
+  CreatedAt: string
+  UpdatedAt: string
+}
+
+export interface Payment {
+  PK: string // PAYMENT#<uuid>
+  SK: string
+  PathfinderId: string
+  PathfinderFeeId: string
+  Amount: number
+  PaymentMethod: 'card' | 'cash' | 'pix-church' | 'pix-qr' | '7me' | 'church'
+  PaymentDate: string
+  ReceivedBy?: string
+  Notes?: string
+  ReceiptNumber?: string
+  CreatedAt: string
+}
+
+export interface PathfinderFeeWithDetails extends PathfinderFee {
+  feeType?: FeeType
+  payments?: Payment[]
+}
+
+export interface PathfinderFinancialSummary {
+  pathfinder: Pathfinder
+  totalFeesAssigned: number
+  totalAmountOwed: number
+  totalAmountPaid: number
+  totalAmountRemaining: number
+  overdueFeesCount: number
+  paidFeesCount: number
+  totalPaymentsMade: number
+  fees: PathfinderFeeWithDetails[]
+}
+
+export interface DocumentCompletionStatus {
+  pathfinder: Pathfinder
+  totalRequired: number
+  totalReceived: number
+  completionPercentage: number
+  missingDocuments: string[]
 }
 
 export interface ComboItem {
@@ -72,8 +174,8 @@ export interface Order {
   Subtotal: number
   Discount: number
   TotalAmount: number
-  PaymentMethod: 'card' | 'cash' | 'pix-church' | 'pix-qr'
-  Status: 'pending' | 'preparing' | 'ready' | 'delivered'
+  PaymentMethod?: 'card' | 'cash' | 'pix-church' | 'pix-qr' // null = pay later
+  Status: 'pending' | 'preparing' | 'ready' | 'delivered' | 'not_picked_up'
   Date: string
   Notes?: string
   CampaignId?: string // CAMPAIGN#<uuid>
@@ -110,6 +212,9 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
   const orderItems = ref<OrderItem[]>([])
   const campaigns = ref<Campaign[]>([])
   const selectedCampaignId = ref<string | null>(null)
+  const feeTypes = ref<FeeType[]>([])
+  const pathfinderFees = ref<PathfinderFee[]>([])
+  const payments = ref<Payment[]>([])
 
   // Load data from Supabase
   const loadFromSupabase = async () => {
@@ -162,6 +267,33 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
       } else if (campaigns.value.length > 0) {
         selectedCampaignId.value = campaigns.value[0].PK
       }
+
+      // Load fee types
+      const { data: feeTypesData, error: feeTypesError } = await supabase
+        .from('FeeTypesTable')
+        .select('*')
+        .order('CreatedAt', { ascending: false })
+
+      if (feeTypesError) throw feeTypesError
+      feeTypes.value = feeTypesData || []
+
+      // Load pathfinder fees
+      const { data: pathfinderFeesData, error: pathfinderFeesError } = await supabase
+        .from('PathfinderFeesTable')
+        .select('*')
+        .order('CreatedAt', { ascending: false })
+
+      if (pathfinderFeesError) throw pathfinderFeesError
+      pathfinderFees.value = pathfinderFeesData || []
+
+      // Load payments
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from('PaymentsTable')
+        .select('*')
+        .order('CreatedAt', { ascending: false })
+
+      if (paymentsError) throw paymentsError
+      payments.value = paymentsData || []
     } catch (error) {
       console.error('Error loading data from Supabase:', error)
     }
@@ -405,6 +537,332 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     selectedCampaignId.value = campaignId
   }
 
+  // Fee Type Management
+  const addFeeType = async (feeType: Omit<FeeType, 'PK' | 'SK' | 'CreatedAt' | 'UpdatedAt'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('FeeTypesTable')
+        .insert([feeType])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      feeTypes.value.unshift(data)
+      return data
+    } catch (error) {
+      console.error('Error adding fee type:', error)
+      throw error
+    }
+  }
+
+  const updateFeeType = async (pk: string, updatedData: Partial<FeeType>) => {
+    try {
+      const { data, error } = await supabase
+        .from('FeeTypesTable')
+        .update(updatedData)
+        .eq('PK', pk)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const index = feeTypes.value.findIndex(f => f.PK === pk)
+      if (index !== -1) {
+        feeTypes.value[index] = data
+      }
+    } catch (error) {
+      console.error('Error updating fee type:', error)
+      throw error
+    }
+  }
+
+  const deleteFeeType = async (pk: string) => {
+    try {
+      const { error } = await supabase
+        .from('FeeTypesTable')
+        .delete()
+        .eq('PK', pk)
+
+      if (error) throw error
+
+      feeTypes.value = feeTypes.value.filter(f => f.PK !== pk)
+      // Cascade will delete associated PathfinderFees
+      pathfinderFees.value = pathfinderFees.value.filter(pf => pf.FeeTypeId !== pk)
+    } catch (error) {
+      console.error('Error deleting fee type:', error)
+      throw error
+    }
+  }
+
+  // Pathfinder Fee Management
+  const assignFeeToPathfinder = async (pathfinderId: string, feeTypeId: string, dueDate: string) => {
+    try {
+      const feeType = feeTypes.value.find(f => f.PK === feeTypeId)
+      if (!feeType) throw new Error('Fee type not found')
+
+      const { data, error } = await supabase
+        .from('PathfinderFeesTable')
+        .insert([{
+          PathfinderId: pathfinderId,
+          FeeTypeId: feeTypeId,
+          Amount: feeType.Amount,
+          DueDate: dueDate,
+          Status: 'pending',
+          AmountPaid: 0,
+          AmountRemaining: feeType.Amount
+        }])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      pathfinderFees.value.unshift(data)
+      return data
+    } catch (error) {
+      console.error('Error assigning fee to pathfinder:', error)
+      throw error
+    }
+  }
+
+  const bulkAssignFee = async (feeTypeId: string, pathfinderIds: string[], dueDate: string) => {
+    try {
+      const feeType = feeTypes.value.find(f => f.PK === feeTypeId)
+      if (!feeType) throw new Error('Fee type not found')
+
+      const feesToInsert = pathfinderIds.map(pathfinderId => ({
+        PathfinderId: pathfinderId,
+        FeeTypeId: feeTypeId,
+        Amount: feeType.Amount,
+        DueDate: dueDate,
+        Status: 'pending',
+        AmountPaid: 0,
+        AmountRemaining: feeType.Amount
+      }))
+
+      const { data, error } = await supabase
+        .from('PathfinderFeesTable')
+        .insert(feesToInsert)
+        .select()
+
+      if (error) throw error
+
+      pathfinderFees.value.unshift(...data)
+      return data
+    } catch (error) {
+      console.error('Error bulk assigning fee:', error)
+      throw error
+    }
+  }
+
+  const updatePathfinderFee = async (pk: string, updatedData: Partial<PathfinderFee>) => {
+    try {
+      const { data, error } = await supabase
+        .from('PathfinderFeesTable')
+        .update(updatedData)
+        .eq('PK', pk)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const index = pathfinderFees.value.findIndex(pf => pf.PK === pk)
+      if (index !== -1) {
+        pathfinderFees.value[index] = data
+      }
+    } catch (error) {
+      console.error('Error updating pathfinder fee:', error)
+      throw error
+    }
+  }
+
+  const waiveFee = async (pk: string, notes?: string) => {
+    await updatePathfinderFee(pk, { Status: 'waived', Notes: notes })
+  }
+
+  const deletePathfinderFee = async (pk: string) => {
+    try {
+      const { error } = await supabase
+        .from('PathfinderFeesTable')
+        .delete()
+        .eq('PK', pk)
+
+      if (error) throw error
+
+      pathfinderFees.value = pathfinderFees.value.filter(pf => pf.PK !== pk)
+      // Cascade will delete associated payments
+      payments.value = payments.value.filter(p => p.PathfinderFeeId !== pk)
+    } catch (error) {
+      console.error('Error deleting pathfinder fee:', error)
+      throw error
+    }
+  }
+
+  // Payment Management
+  const addPayment = async (payment: Omit<Payment, 'PK' | 'SK' | 'CreatedAt' | 'ReceivedBy'>) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      const { data, error } = await supabase
+        .from('PaymentsTable')
+        .insert([{
+          ...payment,
+          ReceivedBy: user?.id
+        }])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      payments.value.unshift(data)
+
+      // Reload pathfinder fees to get updated amounts (trigger updates them)
+      const { data: updatedFee } = await supabase
+        .from('PathfinderFeesTable')
+        .select('*')
+        .eq('PK', payment.PathfinderFeeId)
+        .single()
+
+      if (updatedFee) {
+        const index = pathfinderFees.value.findIndex(pf => pf.PK === payment.PathfinderFeeId)
+        if (index !== -1) {
+          pathfinderFees.value[index] = updatedFee
+        }
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error adding payment:', error)
+      throw error
+    }
+  }
+
+  const deletePayment = async (pk: string) => {
+    try {
+      const payment = payments.value.find(p => p.PK === pk)
+      if (!payment) throw new Error('Payment not found')
+
+      const { error } = await supabase
+        .from('PaymentsTable')
+        .delete()
+        .eq('PK', pk)
+
+      if (error) throw error
+
+      payments.value = payments.value.filter(p => p.PK !== pk)
+
+      // Reload pathfinder fee to get updated amounts (trigger reverts them)
+      const { data: updatedFee } = await supabase
+        .from('PathfinderFeesTable')
+        .select('*')
+        .eq('PK', payment.PathfinderFeeId)
+        .single()
+
+      if (updatedFee) {
+        const index = pathfinderFees.value.findIndex(pf => pf.PK === payment.PathfinderFeeId)
+        if (index !== -1) {
+          pathfinderFees.value[index] = updatedFee
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting payment:', error)
+      throw error
+    }
+  }
+
+  // Document Management
+  const getRequiredDocuments = (type: Pathfinder['Type']): string[] => {
+    const common = ['id_cpf', 'sus_card', 'proof_residence']
+    if (type === 'desbravador') {
+      return [...common, 'parent_id_cpf', 'vaccination_card']
+    } else if (type === 'staff' || type === 'directors') {
+      return [...common, 'criminal_background']
+    }
+    return common
+  }
+
+  const updateDocumentStatus = async (
+    pathfinderId: string,
+    documentKey: keyof DocumentStatusMap,
+    status: DocumentStatus
+  ) => {
+    try {
+      const pathfinder = pathfinders.value.find(p => p.PK === pathfinderId)
+      if (!pathfinder) throw new Error('Pathfinder not found')
+
+      const { data: { user } } = await supabase.auth.getUser()
+
+      const updatedDocuments = {
+        ...pathfinder.Documents,
+        [documentKey]: {
+          ...status,
+          updatedAt: new Date().toISOString(),
+          updatedBy: user?.id
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('PathfindersTable')
+        .update({ Documents: updatedDocuments })
+        .eq('PK', pathfinderId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const index = pathfinders.value.findIndex(p => p.PK === pathfinderId)
+      if (index !== -1) {
+        pathfinders.value[index] = data
+      }
+    } catch (error) {
+      console.error('Error updating document status:', error)
+      throw error
+    }
+  }
+
+  const bulkUpdateDocumentStatus = async (
+    pathfinderIds: string[],
+    documentKey: keyof DocumentStatusMap,
+    status: DocumentStatus
+  ) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      const promises = pathfinderIds.map(async (pathfinderId) => {
+        const pathfinder = pathfinders.value.find(p => p.PK === pathfinderId)
+        if (!pathfinder) return
+
+        const updatedDocuments = {
+          ...pathfinder.Documents,
+          [documentKey]: {
+            ...status,
+            updatedAt: new Date().toISOString(),
+            updatedBy: user?.id
+          }
+        }
+
+        const { data, error } = await supabase
+          .from('PathfindersTable')
+          .update({ Documents: updatedDocuments })
+          .eq('PK', pathfinderId)
+          .select()
+          .single()
+
+        if (error) throw error
+
+        const index = pathfinders.value.findIndex(p => p.PK === pathfinderId)
+        if (index !== -1) {
+          pathfinders.value[index] = data
+        }
+      })
+
+      await Promise.all(promises)
+    } catch (error) {
+      console.error('Error bulk updating document status:', error)
+      throw error
+    }
+  }
+
   // Order management
   const addOrder = async (order: Omit<Order, 'PK' | 'SK' | 'CreatedAt'> & { items?: any[] }) => {
     try {
@@ -528,7 +986,8 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
       pending: filteredOrders.value.filter(o => o.Status === 'pending').length,
       preparing: filteredOrders.value.filter(o => o.Status === 'preparing').length,
       ready: filteredOrders.value.filter(o => o.Status === 'ready').length,
-      delivered: filteredOrders.value.filter(o => o.Status === 'delivered').length
+      delivered: filteredOrders.value.filter(o => o.Status === 'delivered').length,
+      not_picked_up: filteredOrders.value.filter(o => o.Status === 'not_picked_up').length
     }
   })
 
@@ -592,7 +1051,9 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     const paymentMap = { card: 0, cash: 0, 'pix-church': 0, 'pix-qr': 0 }
 
     filteredOrders.value.forEach(order => {
-      paymentMap[order.PaymentMethod] += order.TotalAmount
+      if (order.PaymentMethod) {
+        paymentMap[order.PaymentMethod] += order.TotalAmount
+      }
     })
 
     return paymentMap
@@ -682,6 +1143,86 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
       .sort((a, b) => new Date(a.CreatedAt).getTime() - new Date(b.CreatedAt).getTime())
   })
 
+  // Financial tracking computed properties
+  const pathfinderFinancialSummaries = computed((): PathfinderFinancialSummary[] => {
+    return pathfinders.value.map(pathfinder => {
+      const pathfinderFeesForMember = pathfinderFees.value.filter(
+        pf => pf.PathfinderId === pathfinder.PK
+      )
+
+      const feesWithDetails: PathfinderFeeWithDetails[] = pathfinderFeesForMember.map(fee => ({
+        ...fee,
+        feeType: feeTypes.value.find(ft => ft.PK === fee.FeeTypeId),
+        payments: payments.value.filter(p => p.PathfinderFeeId === fee.PK)
+      }))
+
+      const totalFeesAssigned = pathfinderFeesForMember.length
+      const totalAmountOwed = pathfinderFeesForMember.reduce((sum, fee) => sum + fee.Amount, 0)
+      const totalAmountPaid = pathfinderFeesForMember.reduce((sum, fee) => sum + fee.AmountPaid, 0)
+      const totalAmountRemaining = pathfinderFeesForMember.reduce((sum, fee) => sum + fee.AmountRemaining, 0)
+      const overdueFeesCount = pathfinderFeesForMember.filter(fee => fee.Status === 'overdue').length
+      const paidFeesCount = pathfinderFeesForMember.filter(fee => fee.Status === 'paid').length
+      const totalPaymentsMade = payments.value.filter(p => p.PathfinderId === pathfinder.PK).length
+
+      return {
+        pathfinder,
+        totalFeesAssigned,
+        totalAmountOwed,
+        totalAmountPaid,
+        totalAmountRemaining,
+        overdueFeesCount,
+        paidFeesCount,
+        totalPaymentsMade,
+        fees: feesWithDetails
+      }
+    })
+  })
+
+  const totalOutstandingBalance = computed(() => {
+    return pathfinderFees.value.reduce((sum, fee) => sum + fee.AmountRemaining, 0)
+  })
+
+  const totalCollected = computed(() => {
+    return pathfinderFees.value.reduce((sum, fee) => sum + fee.AmountPaid, 0)
+  })
+
+  const overdueFeesCount = computed(() => {
+    return pathfinderFees.value.filter(fee => fee.Status === 'overdue').length
+  })
+
+  // Document tracking computed properties
+  const documentCompletionStatuses = computed((): DocumentCompletionStatus[] => {
+    return pathfinders.value.map(pathfinder => {
+      const requiredDocs = getRequiredDocuments(pathfinder.Type)
+      const totalRequired = requiredDocs.length
+
+      const receivedDocs = requiredDocs.filter(docKey => {
+        const docStatus = pathfinder.Documents[docKey as keyof DocumentStatusMap]
+        return docStatus?.status === 'received'
+      })
+      const totalReceived = receivedDocs.length
+
+      const missingDocuments = requiredDocs.filter(docKey => {
+        const docStatus = pathfinder.Documents[docKey as keyof DocumentStatusMap]
+        return !docStatus || docStatus.status === 'missing'
+      })
+
+      const completionPercentage = totalRequired > 0 ? Math.round((totalReceived / totalRequired) * 100) : 0
+
+      return {
+        pathfinder,
+        totalRequired,
+        totalReceived,
+        completionPercentage,
+        missingDocuments
+      }
+    })
+  })
+
+  const pathfindersWithIncompleteDocuments = computed(() => {
+    return documentCompletionStatuses.value.filter(status => status.completionPercentage < 100)
+  })
+
   // Helpers
   const activeCampaign = computed(() => campaigns.value.find(c => c.Status === 'active'))
   const selectedCampaign = computed(() => campaigns.value.find(c => c.PK === selectedCampaignId.value))
@@ -724,6 +1265,108 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     link.click()
   }
 
+  const exportFinancialReport = () => {
+    const headers = [
+      'Nome',
+      'Tipo',
+      'Taxas Atribuídas',
+      'Total Devido',
+      'Total Pago',
+      'Saldo Restante',
+      'Taxas em Atraso',
+      'Taxas Pagas',
+      'Status'
+    ]
+
+    const rows = pathfinderFinancialSummaries.value.map(summary => {
+      const typeText = {
+        'desbravador': 'Desbravador',
+        'staff': 'Staff',
+        'directors': 'Diretoria'
+      }[summary.pathfinder.Type] || summary.pathfinder.Type
+
+      const status = summary.overdueFeesCount > 0
+        ? 'Em Atraso'
+        : summary.totalAmountRemaining > 0
+        ? 'Pendente'
+        : 'Em Dia'
+
+      return [
+        summary.pathfinder.Name,
+        typeText,
+        summary.totalFeesAssigned,
+        `R$ ${summary.totalAmountOwed.toFixed(2).replace('.', ',')}`,
+        `R$ ${summary.totalAmountPaid.toFixed(2).replace('.', ',')}`,
+        `R$ ${summary.totalAmountRemaining.toFixed(2).replace('.', ',')}`,
+        summary.overdueFeesCount,
+        summary.paidFeesCount,
+        status
+      ]
+    })
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `relatorio_financeiro_${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+  }
+
+  const exportDocumentReport = () => {
+    const headers = [
+      'Nome',
+      'Tipo',
+      'Documentos Necessários',
+      'Documentos Recebidos',
+      'Conclusão (%)',
+      'Documentos Faltando'
+    ]
+
+    const documentNames: Record<string, string> = {
+      'id_cpf': 'RG + CPF',
+      'sus_card': 'Cartão SUS',
+      'proof_residence': 'Comprovante de Residência',
+      'parent_id_cpf': 'RG + CPF dos Pais',
+      'vaccination_card': 'Cartão de Vacinação',
+      'criminal_background': 'Antecedentes Criminais',
+      'health_insurance': 'Cartão de Plano de Saúde'
+    }
+
+    const rows = documentCompletionStatuses.value.map(status => {
+      const typeText = {
+        'desbravador': 'Desbravador',
+        'staff': 'Staff',
+        'directors': 'Diretoria'
+      }[status.pathfinder.Type] || status.pathfinder.Type
+
+      const missingDocsText = status.missingDocuments
+        .map(doc => documentNames[doc] || doc)
+        .join(', ') || 'Nenhum'
+
+      return [
+        status.pathfinder.Name,
+        typeText,
+        status.totalRequired,
+        status.totalReceived,
+        `${status.completionPercentage}%`,
+        missingDocsText
+      ]
+    })
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `relatorio_documentos_${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+  }
+
   // Initialize store
   loadFromSupabase()
 
@@ -735,6 +1378,9 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     orderItems,
     campaigns,
     selectedCampaignId,
+    feeTypes,
+    pathfinderFees,
+    payments,
 
     // Actions
     addPathfinder,
@@ -755,7 +1401,33 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     loadFromSupabase,
     exportToCSV,
 
+    // Fee Type Actions
+    addFeeType,
+    updateFeeType,
+    deleteFeeType,
+
+    // Pathfinder Fee Actions
+    assignFeeToPathfinder,
+    bulkAssignFee,
+    updatePathfinderFee,
+    waiveFee,
+    deletePathfinderFee,
+
+    // Payment Actions
+    addPayment,
+    deletePayment,
+
+    // Document Actions
+    getRequiredDocuments,
+    updateDocumentStatus,
+    bulkUpdateDocumentStatus,
+
+    // Export Actions
+    exportFinancialReport,
+    exportDocumentReport,
+
     // Computed
+    filteredOrders,
     totalSales,
     totalOrders,
     totalProductsSold,
@@ -768,6 +1440,16 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     ordersWithDetails,
     kitchenOrders,
     activeCampaign,
-    selectedCampaign
+    selectedCampaign,
+
+    // Financial Computed
+    pathfinderFinancialSummaries,
+    totalOutstandingBalance,
+    totalCollected,
+    overdueFeesCount,
+
+    // Document Computed
+    documentCompletionStatuses,
+    pathfindersWithIncompleteDocuments
   }
 })

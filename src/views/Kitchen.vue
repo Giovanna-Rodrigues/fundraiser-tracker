@@ -25,6 +25,7 @@ const filteredOrders = computed(() => {
   return allOrders.value.filter(order => order.Status === activeFilter.value)
 })
 
+// Kitchen only transitions through these statuses — not_picked_up is managed from the dashboard
 const statusOptions = ref([
   { label: 'Pendente', value: 'pending' },
   { label: 'Preparando', value: 'preparing' },
@@ -261,7 +262,8 @@ const getStatusClass = (status: string) => {
   }
 }
 
-const getPaymentMethodLabel = (method: string) => {
+const getPaymentMethodLabel = (method: string | undefined | null) => {
+  if (!method) return 'Pagar depois'
   const labels: Record<string, string> = {
     'card': 'Cartão',
     'cash': 'Dinheiro',

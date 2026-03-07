@@ -12,6 +12,12 @@ const toast = useToast()
 const submitted = ref(false)
 const quickSubmitted = ref(false)
 const showQuickAddPathfinder = ref(false)
+const orderMode = ref<'not_picked_up' | 'pay_later' | null>(null)
+
+const orderModeOptions = [
+  { label: 'Doação', value: 'not_picked_up' },
+  { label: 'Pagar depois', value: 'pay_later' }
+]
 
 // Form data
 const orderForm = ref({
@@ -143,6 +149,7 @@ const clearForm = () => {
     Notes: ''
   }
   submitted.value = false
+  orderMode.value = null
 }
 
 const validateForm = () => {
@@ -150,7 +157,7 @@ const validateForm = () => {
          orderForm.value.CustomerName?.trim() &&
          orderForm.value.items.length > 0 &&
          orderForm.value.items.every(item => item.ProductId && item.Quantity > 0) &&
-         orderForm.value.PaymentMethod
+         (orderMode.value === 'pay_later' || orderForm.value.PaymentMethod)
 }
 
 const saveOrder = async () => {
@@ -174,8 +181,8 @@ const saveOrder = async () => {
       Subtotal: orderForm.value.Subtotal,
       Discount: orderForm.value.Discount,
       TotalAmount: orderForm.value.TotalAmount,
-      PaymentMethod: orderForm.value.PaymentMethod!,
-      Status: 'pending' as const,
+      PaymentMethod: orderMode.value === 'pay_later' ? undefined : orderForm.value.PaymentMethod!,
+      Status: (orderMode.value === 'not_picked_up' ? 'not_picked_up' : 'pending') as Order['Status'],
       Date: orderForm.value.Date.toISOString().split('T')[0],
       Notes: orderForm.value.Notes?.trim()
     }
@@ -452,7 +459,7 @@ watch(() => orderForm.value.Discount, updateTotal)
                 />
               </div>
 
-              <div class="field">
+              <div v-if="orderMode !== 'pay_later'" class="field">
                 <label for="paymentMethod">Forma de Pagamento *</label>
                 <Dropdown
                   id="paymentMethod"
@@ -461,8 +468,28 @@ watch(() => orderForm.value.Discount, updateTotal)
                   optionLabel="label"
                   optionValue="value"
                   placeholder="Selecione a forma de pagamento"
-                  :class="{ 'p-invalid': submitted && !orderForm.PaymentMethod }"
+                  :class="{ 'p-invalid': submitted && orderMode !== 'pay_later' && !orderForm.PaymentMethod }"
                 />
+                <small v-if="submitted && orderMode !== 'pay_later' && !orderForm.PaymentMethod" class="p-error">
+                  Forma de pagamento é obrigatória.
+                </small>
+              </div>
+
+              <div class="field full-width">
+                <label>Tipo especial (opcional)</label>
+                <SelectButton
+                  v-model="orderMode"
+                  :options="orderModeOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  :allowEmpty="true"
+                />
+                <small v-if="orderMode === 'not_picked_up'" class="mode-hint">
+                  <i class="pi pi-info-circle"></i> Doação: pedido pago mas não será retirado (não aparece na cozinha)
+                </small>
+                <small v-if="orderMode === 'pay_later'" class="mode-hint mode-hint--warning">
+                  <i class="pi pi-clock"></i> Pagar depois: nenhum pagamento registrado agora
+                </small>
               </div>
 
               <div class="field full-width">
@@ -1049,6 +1076,31 @@ watch(() => orderForm.value.Discount, updateTotal)
   .sidebar {
     order: -1;
   }
+}
+
+.mode-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  color: #374151;
+  font-size: 0.8rem;
+}
+
+.mode-hint--warning {
+  color: #856404;
+}
+
+.pay-later-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 0.5rem;
+  color: #856404;
+  font-size: 0.9rem;
 }
 
 .combo-flavors-section {

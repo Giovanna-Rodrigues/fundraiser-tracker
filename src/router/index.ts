@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -63,12 +64,38 @@ const router = createRouter({
       name: 'users',
       component: () => import('../views/UserManagement.vue'),
     },
+    {
+      path: '/financial',
+      name: 'financial',
+      component: () => import('../views/FinancialTracking.vue'),
+    },
+    {
+      path: '/documents',
+      name: 'documents',
+      component: () => import('../views/DocumentTracking.vue'),
+    },
     // Legacy routes redirect
     {
       path: '/sales',
       redirect: '/orders'
     },
   ],
+})
+
+// Navigation guard — redirect to login if not authenticated
+router.beforeEach((to, from, next) => {
+  const publicRoutes = ['/login', '/reset-password']
+  if (publicRoutes.includes(to.path)) {
+    next()
+    return
+  }
+
+  const { currentUser } = useAuth()
+  if (!currentUser.value) {
+    next('/login')
+  } else {
+    next()
+  }
 })
 
 export default router

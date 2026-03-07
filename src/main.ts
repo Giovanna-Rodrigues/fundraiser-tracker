@@ -25,6 +25,11 @@ import Badge from 'primevue/badge'
 import Avatar from 'primevue/avatar'
 import Chart from 'primevue/chart'
 import Divider from 'primevue/divider'
+import SelectButton from 'primevue/selectbutton'
+import TabView from 'primevue/tabview'
+import TabPanel from 'primevue/tabpanel'
+import ProgressBar from 'primevue/progressbar'
+import Tooltip from 'primevue/tooltip'
 
 // PrimeIcons
 import 'primeicons/primeicons.css'
@@ -81,5 +86,10 @@ app.component('Badge', Badge)
 app.component('Avatar', Avatar)
 app.component('Chart', Chart)
 app.component('Divider', Divider)
+app.component('SelectButton', SelectButton)
+app.component('TabView', TabView)
+app.component('TabPanel', TabPanel)
+app.component('ProgressBar', ProgressBar)
+app.directive('tooltip', Tooltip)
 
 app.mount('#app')

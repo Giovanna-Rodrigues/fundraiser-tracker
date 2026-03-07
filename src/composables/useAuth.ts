@@ -2,13 +2,31 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 
-const currentUser = ref<any>(null)
+export type UserRole = 'admin' | 'user' | 'treasurer' | 'secretary'
+
+interface CurrentUser {
+  email: string | undefined
+  id: string
+  role: UserRole
+}
+
+const currentUser = ref<CurrentUser | null>(null)
 
 export const useAuth = () => {
   const router = useRouter()
   const route = useRoute()
 
   const isAuthenticated = computed(() => !!currentUser.value)
+  const userRole = computed(() => currentUser.value?.role || 'user')
+  const isAdmin = computed(() => currentUser.value?.role === 'admin')
+  const isTreasurer = computed(() => currentUser.value?.role === 'treasurer' || currentUser.value?.role === 'admin')
+  const isSecretary = computed(() => currentUser.value?.role === 'secretary' || currentUser.value?.role === 'admin')
+
+  const hasRole = (roles: UserRole | UserRole[]): boolean => {
+    if (!currentUser.value) return false
+    const roleArray = Array.isArray(roles) ? roles : [roles]
+    return roleArray.includes(currentUser.value.role)
+  }
 
   const initializeAuth = async () => {
     // Gets the current session
@@ -19,7 +37,8 @@ export const useAuth = () => {
       // Sets current user and saves to localStorage
       currentUser.value = {
         email: session.user.email,
-        id: session.user.id
+        id: session.user.id,
+        role: (session.user.user_metadata?.role as UserRole) || 'user'
       }
       localStorage.setItem('user', JSON.stringify(currentUser.value))
     } else {
@@ -61,7 +80,8 @@ export const useAuth = () => {
       } else if (session?.user) {
         currentUser.value = {
           email: session.user.email,
-          id: session.user.id
+          id: session.user.id,
+          role: (session.user.user_metadata?.role as UserRole) || 'user'
         }
         localStorage.setItem('user', JSON.stringify(currentUser.value))
       }
@@ -78,6 +98,11 @@ export const useAuth = () => {
   return {
     currentUser,
     isAuthenticated,
+    userRole,
+    isAdmin,
+    isTreasurer,
+    isSecretary,
+    hasRole,
     initializeAuth,
     setupAuthListener,
     logout

@@ -11,12 +11,14 @@ const users = ref<any[]>([])
 
 const inviteForm = ref({
   email: '',
-  role: 'user' as 'admin' | 'user'
+  role: 'user' as 'admin' | 'user' | 'treasurer' | 'secretary'
 })
 
 const roleOptions = ref([
   { label: 'Usuário', value: 'user' },
-  { label: 'Administrador', value: 'admin' }
+  { label: 'Administrador', value: 'admin' },
+  { label: 'Tesoureiro', value: 'treasurer' },
+  { label: 'Secretário', value: 'secretary' }
 ])
 
 // Load existing users
@@ -145,11 +147,23 @@ const getStatusLabel = (status: string) => {
 }
 
 const getRoleLabel = (role: string) => {
-  return role === 'admin' ? 'Administrador' : 'Usuário'
+  const roleLabels: Record<string, string> = {
+    'admin': 'Administrador',
+    'user': 'Usuário',
+    'treasurer': 'Tesoureiro',
+    'secretary': 'Secretário'
+  }
+  return roleLabels[role] || 'Usuário'
 }
 
 const getRoleSeverity = (role: string) => {
-  return role === 'admin' ? 'info' : 'secondary'
+  const roleSeverities: Record<string, string> = {
+    'admin': 'danger',
+    'treasurer': 'success',
+    'secretary': 'info',
+    'user': 'secondary'
+  }
+  return roleSeverities[role] || 'secondary'
 }
 
 onMounted(() => {
@@ -286,6 +300,8 @@ onMounted(() => {
             <li>Ele poderá definir sua própria senha</li>
             <li>O convite expira em 24 horas</li>
             <li v-if="inviteForm.role === 'admin'">⚠️ Administradores têm acesso total ao sistema</li>
+            <li v-if="inviteForm.role === 'treasurer'">💰 Tesoureiros têm acesso ao gerenciamento financeiro</li>
+            <li v-if="inviteForm.role === 'secretary'">📋 Secretários têm acesso ao gerenciamento de documentos</li>
           </ul>
         </div>
       </div>
