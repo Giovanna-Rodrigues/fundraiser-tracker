@@ -468,9 +468,9 @@ watch(() => orderForm.value.Discount, updateTotal)
                   optionLabel="label"
                   optionValue="value"
                   placeholder="Selecione a forma de pagamento"
-                  :class="{ 'p-invalid': submitted && orderMode !== 'pay_later' && !orderForm.PaymentMethod }"
+                  :class="{ 'p-invalid': submitted && !orderForm.PaymentMethod }"
                 />
-                <small v-if="submitted && orderMode !== 'pay_later' && !orderForm.PaymentMethod" class="p-error">
+                <small v-if="submitted && !orderForm.PaymentMethod" class="p-error">
                   Forma de pagamento é obrigatória.
                 </small>
               </div>

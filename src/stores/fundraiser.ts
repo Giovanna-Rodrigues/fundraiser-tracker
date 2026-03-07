@@ -300,7 +300,7 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
   }
 
   // Pathfinder management
-  const addPathfinder = async (pathfinder: Omit<Pathfinder, 'PK' | 'SK' | 'CreatedAt'>) => {
+  const addPathfinder = async (pathfinder: { Name: string } & Partial<Omit<Pathfinder, 'PK' | 'SK' | 'CreatedAt' | 'Name'>>) => {
     try {
       const { data, error } = await supabase
         .from('PathfindersTable')
@@ -1234,12 +1234,13 @@ export const useFundraiserStore = defineStore('fundraiser', () => {
     const rows = filteredOrders.value.map(order => {
       const pathfinder = pathfinders.value.find(p => p.PK === order.PathfinderId)
 
-      const paymentText = {
+      const paymentMap: Record<string, string> = {
         'card': 'Cartão',
         'cash': 'Dinheiro',
         'pix-church': 'Pix Igreja',
         'pix-qr': 'Pix QR'
-      }[order.PaymentMethod] || order.PaymentMethod
+      }
+      const paymentText = order.PaymentMethod ? (paymentMap[order.PaymentMethod] || order.PaymentMethod) : 'Pagar depois'
 
       return [
         order.Date,

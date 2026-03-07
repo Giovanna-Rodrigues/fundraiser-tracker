@@ -296,7 +296,7 @@ const deletePathfinderConfirmed = async () => {
           <div class="detail-panel">
             <TabView>
               <!-- Documents Tab -->
-              <TabPanel header="Documentos">
+              <TabPanel header="Documentos" value="docs">
                 <div v-if="getDocumentStatus(data) as any" class="doc-panel">
                   <div class="doc-progress-row">
                     <span class="doc-pct-label">Conclusão: {{ getDocumentStatus(data)?.completionPercentage }}%</span>
@@ -326,7 +326,7 @@ const deletePathfinderConfirmed = async () => {
               </TabPanel>
 
               <!-- Financial Tab -->
-              <TabPanel header="Financeiro">
+              <TabPanel header="Financeiro" value="financial">
                 <div v-if="getFinancialSummary(data)" class="fin-panel">
                   <div class="fin-cards">
                     <div class="fin-card">
@@ -371,7 +371,7 @@ const deletePathfinderConfirmed = async () => {
               </TabPanel>
 
               <!-- Orders Tab -->
-              <TabPanel header="Pedidos">
+              <TabPanel header="Pedidos" value="orders">
                 <div v-if="getPathfinderOrders(data).length > 0">
                   <DataTable :value="getPathfinderOrders(data)" class="p-datatable-sm" stripedRows>
                     <Column field="Date" header="Data">
